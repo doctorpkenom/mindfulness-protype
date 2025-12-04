@@ -13,29 +13,30 @@ from ml.online_coordinator import OnlineCoordinator
 from processor.research_engine import ResearchEngine
 from simulated_testing.user_persona import UserPersona
 
-def run_simulation():
-    print("=== INITIALIZING 30-DAY SIMULATION ===")
+def run_simulation(user: UserPersona = None):
+    """
+    Runs a 30-day simulation for the given user.
+    Returns a dictionary of results for visualization.
+    """
+    print(f"=== INITIALIZING 30-DAY SIMULATION FOR {user.name if user else 'Default'} ===")
     
     # 1. Setup System
     engine = ResearchEngine()
     coordinator = OnlineCoordinator()
     all_strategies = engine.strategies
     
-    # 2. Setup User: "The Burnout Student"
-    # High stress, fluctuating energy, needs scaffolding
-    user = UserPersona(name="Alex (Burnout Student)", base_stress=0.75, base_energy=0.4)
-    
-    print(f"User Profile: {user.name}")
-    print(f"Base Stress: {user.base_stress}, Base Energy: {user.base_energy}")
+    # 2. Setup User (if not provided, create default)
+    if not user:
+        user = UserPersona(name="Alex (Burnout Student)", base_stress=0.75, base_energy=0.4)
     
     # Metrics
-    history = []
     daily_completion_rates = []
+    daily_stress = []
+    daily_energy = []
     
     # 3. Run 30 Days
     for day in range(1, 31):
         user.next_day()
-        print(f"\n--- Day {day} (Stress: {user.current_stress:.2f}, Energy: {user.current_energy:.2f}) ---")
         
         interactions = 5 # 5 distraction events per day
         successes = 0
@@ -45,9 +46,6 @@ def run_simulation():
             context = user.get_context()
             
             # B. ML Selects Strategy
-            # Filter strategies slightly to simulate relevant options (e.g., only 5 random ones available to pick from)
-            # In real app, this might be filtered by "Trigger" type. 
-            # Here we pass ALL strategies to let the model pick the absolute best.
             chosen_strat = coordinator.select_strategy(context, all_strategies)
             
             # C. User Reacts
@@ -58,30 +56,30 @@ def run_simulation():
             
             # Log
             if outcome == "completed": successes += 1
-            print(f"  Event {i+1}: Suggested '{chosen_strat['name']}' -> {outcome.upper()}")
             
         rate = successes / interactions
         daily_completion_rates.append(rate)
-        print(f"  >> Day {day} Completion Rate: {rate*100:.0f}%")
+        daily_stress.append(user.current_stress)
+        daily_energy.append(user.current_energy)
 
-    # 4. Final Report
-    print("\n\n=== SIMULATION REPORT ===")
-    print(f"User: {user.name}")
-    print(f"Total Days: 30")
-    print(f"Interactions: {30 * 5}")
-    
+    # 4. Compile Results
     avg_first_week = sum(daily_completion_rates[:7]) / 7
     avg_last_week = sum(daily_completion_rates[-7:]) / 7
     improvement = avg_last_week - avg_first_week
     
-    print(f"Avg Completion Rate (Week 1): {avg_first_week*100:.1f}%")
-    print(f"Avg Completion Rate (Week 4): {avg_last_week*100:.1f}%")
-    print(f"Improvement: {improvement*100:+.1f}%")
+    results = {
+        "user_name": user.name,
+        "daily_completion_rates": daily_completion_rates,
+        "daily_stress": daily_stress,
+        "daily_energy": daily_energy,
+        "week_1_avg": avg_first_week,
+        "week_4_avg": avg_last_week,
+        "improvement": improvement
+    }
     
-    if improvement > 0:
-        print("CONCLUSION: The ML Ensemble successfully adapted to the user's needs.")
-    else:
-        print("CONCLUSION: The model failed to improve user performance.")
+    return results
 
 if __name__ == "__main__":
-    run_simulation()
+    # Test run
+    res = run_simulation()
+    print(f"Simulation Complete. Improvement: {res['improvement']*100:+.1f}%")

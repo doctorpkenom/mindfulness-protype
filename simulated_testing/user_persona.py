@@ -79,3 +79,29 @@ class UserPersona:
         else:
             self.streak = 0
             return "ignored", -0.1
+
+    def to_dict(self):
+        """Serialize user state to dictionary."""
+        return {
+            "name": self.name,
+            "base_stress": self.base_stress,
+            "base_energy": self.base_energy,
+            "resilience": self.resilience,
+            "current_stress": self.current_stress,
+            "current_energy": self.current_energy,
+            "streak": self.streak
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        """Create UserPersona from dictionary."""
+        user = cls(
+            name=data["name"],
+            base_stress=data["base_stress"],
+            base_energy=data["base_energy"],
+            resilience=data.get("resilience", 0.3)
+        )
+        user.current_stress = data.get("current_stress", user.base_stress)
+        user.current_energy = data.get("current_energy", user.base_energy)
+        user.streak = data.get("streak", 0)
+        return user
