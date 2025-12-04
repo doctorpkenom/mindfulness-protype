@@ -1,0 +1,56 @@
+{
+    "id": "rubinstein_2001",
+    "title": "Executive Control of Cognitive Processes in Task Switching",
+    "authors": [
+        "Joshua S. Rubinstein",
+        "David E. Meyer",
+        "Jeffrey E. Evans"
+    ],
+    "year": 2001,
+    "source_type": "Journal Article (Journal of Experimental Psychology)",
+    "core_concept": "Task Switching Cost",
+    "summary": "Switching between tasks involves two distinct stages: 'goal shifting' (deciding to do it) and 'rule activation' (loading the rules for the new task). This incurs a significant time and accuracy cost, which increases with task complexity.",
+    "effectiveness_metrics": {
+        "metric": "Time Cost",
+        "value": "Significant (increases with complexity)",
+        "description": "Frequent multitasking drastically reduces overall efficiency due to these cumulative micro-delays."
+    },
+    "mechanisms": [
+        {
+            "name": "Goal Shifting",
+            "description": "The executive process of disengaging from one goal and engaging another."
+        },
+        {
+            "name": "Rule Activation",
+            "description": "The cognitive 'boot-up' time required to remember how to perform the new task."
+        },
+        {
+            "name": "Switching Penalty",
+            "description": "The loss of performance immediately following a switch."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Batching Protocol",
+            "logic": "Group [Similar_Tasks] to minimize [Rule_Activation_Switches]",
+            "application_in_app": "Suggest 'Email Mode' or 'Reading Mode' where the user does ONLY that type of task for 20 mins to avoid rule-switching costs.",
+            "difficulty": "Medium",
+            "tags": [
+                "productivity",
+                "efficiency",
+                "template"
+            ]
+        },
+        {
+            "name": "Single-Task Lock-In",
+            "logic": "IF [Focus_Block_Active] THEN [Hide_All_Other_Contexts]",
+            "application_in_app": "During a sprint, visually obscure or hide all other UI elements (nav bars, other lists) to prevent visual cues that trigger goal shifting.",
+            "difficulty": "Low",
+            "tags": [
+                "ui-design",
+                "focus",
+                "template"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,55 @@
+{
+    "id": "ryan_deci_2000",
+    "title": "Self-Determination Theory and the Facilitation of Intrinsic Motivation",
+    "authors": [
+        "Richard M. Ryan",
+        "Edward L. Deci"
+    ],
+    "year": 2000,
+    "source_type": "Journal Article (American Psychologist)",
+    "core_concept": "Self-Determination Theory (SDT)",
+    "summary": "Sustainable motivation requires three psychological needs to be met: Autonomy (I control this), Competence (I am good at this), and Relatedness (I am connected/supported).",
+    "effectiveness_metrics": {
+        "metric": "Persistence",
+        "value": "High",
+        "description": "Intrinsic motivation leads to longer-term adherence than extrinsic rewards (punishment/money)."
+    },
+    "mechanisms": [
+        {
+            "name": "Autonomy Support",
+            "description": "Providing choice and minimizing pressure/control."
+        },
+        {
+            "name": "Competence Feedback",
+            "description": "Providing clear, immediate feedback that confirms mastery/progress."
+        },
+        {
+            "name": "Relatedness",
+            "description": "Creating a sense of security and connection (even with a digital agent)."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Autonomy-First Intervention",
+            "logic": "Always Offer [Skip_Option] AND [Choice_Of_Activity]",
+            "application_in_app": "Never force a lock-out. Always present the intervention as a choice: 'Do you want to focus now?' vs 'Force focus'.",
+            "difficulty": "Low",
+            "tags": [
+                "autonomy",
+                "ethics",
+                "template"
+            ]
+        },
+        {
+            "name": "Competence Visualization",
+            "logic": "Display [User_Progress] as [Cumulative_Growth_Metaphor]",
+            "application_in_app": "Show a 'Garden' or 'Building' that grows with every focus block, visually proving the user's capability.",
+            "difficulty": "Medium",
+            "tags": [
+                "gamification",
+                "competence",
+                "template"
+            ]
+        }
+    ]
+}

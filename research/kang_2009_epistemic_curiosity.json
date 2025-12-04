@@ -1,0 +1,54 @@
+{
+    "id": "kang_2009",
+    "title": "The wick in the candle of learning: Epistemic curiosity activates reward circuitry and enhances memory",
+    "authors": [
+        "Min Jeong Kang",
+        "Colin Camerer",
+        "P. Read Montague",
+        "et al."
+    ],
+    "year": 2009,
+    "source_type": "Journal Article (Psychological Science)",
+    "core_concept": "Curiosity-Reward Link",
+    "summary": "Epistemic curiosity (desire for knowledge) activates the same brain regions as extrinsic rewards (food, sex). It also enhances memory consolidation for the information learned during the curious state.",
+    "effectiveness_metrics": {
+        "metric": "Memory Retention",
+        "value": "Significantly Enhanced",
+        "description": "Information learned while curious is recalled better 1-2 weeks later compared to non-curious states."
+    },
+    "mechanisms": [
+        {
+            "name": "Intrinsic Reward Activation",
+            "description": "Learning itself provides a dopamine hit, reducing the need for external gamification badges."
+        },
+        {
+            "name": "Anticipation Effect",
+            "description": "The period of 'not knowing' (anticipation) is highly stimulating and engaging."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Knowledge Teaser Template",
+            "logic": "Display [High_Curiosity_Question_Related_To_Task] -> Wait -> Reveal [Answer]",
+            "application_in_app": "Use a 'Click to Reveal' interaction pattern for micro-learning content to maximize the anticipation phase.",
+            "difficulty": "Low",
+            "tags": [
+                "engagement",
+                "dopamine",
+                "learning",
+                "template"
+            ]
+        },
+        {
+            "name": "Curiosity-Driven Bridge",
+            "logic": "IF [User_Is_Bored] THEN [Offer_Novelty_Related_To_Goal]",
+            "application_in_app": "When drift is detected due to boredom, offer a 'Did you know?' fact about their current study topic instead of a generic break.",
+            "difficulty": "Medium",
+            "tags": [
+                "intervention",
+                "novelty",
+                "template"
+            ]
+        }
+    ]
+}

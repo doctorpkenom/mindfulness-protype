@@ -1,0 +1,57 @@
+{
+    "id": "lally_2010",
+    "title": "How are habits formed: Modelling habit formation in the real world",
+    "authors": [
+        "Phillippa Lally",
+        "Cornelia H. M. van Jaarsveld",
+        "Henry W. W. Potts",
+        "Jane Wardle"
+    ],
+    "year": 2010,
+    "source_type": "Journal Article (European Journal of Social Psychology)",
+    "core_concept": "Habit Automaticity Curve",
+    "summary": "Habits form through repetition in a consistent context. The time to reach automaticity varies wildly (18 to 254 days), with a median of 66 days. Missing a single opportunity does not materially affect the habit formation process.",
+    "effectiveness_metrics": {
+        "metric": "Days to Automaticity",
+        "value": "Median 66 days",
+        "description": "Demonstrates that consistency over time is more important than intensity or perfection."
+    },
+    "mechanisms": [
+        {
+            "name": "Asymptotic Automaticity",
+            "description": "Habit strength increases steeply at first and then plateaus; early repetition is crucial."
+        },
+        {
+            "name": "Context-Dependence",
+            "description": "Behaviors must be performed in the *same* situation (time/place) to become automatic."
+        },
+        {
+            "name": "Forgiveness Principle",
+            "description": "Occasional omissions do not derail the process, debunking the 'don't break the chain' perfectionism."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Consistency Anchor Template",
+            "logic": "Perform [User_Selected_Action] immediately after [User_Existing_Routine_Anchor]",
+            "application_in_app": "Ask user to link the app usage to a rock-solid existing habit (e.g., 'After I open my laptop', 'After I pour coffee').",
+            "difficulty": "Low",
+            "tags": [
+                "habit-formation",
+                "consistency",
+                "template"
+            ]
+        },
+        {
+            "name": "Forgiving Streak Logic",
+            "logic": "IF [User_Misses_Instance] THEN [Maintain_Streak_With_Repair_Cost]",
+            "application_in_app": "Design the streak system to allow 1-2 'skip days' per week without resetting to zero, aligning with the finding that one miss doesn't kill the habit.",
+            "difficulty": "Low",
+            "tags": [
+                "gamification",
+                "retention",
+                "template"
+            ]
+        }
+    ]
+}
