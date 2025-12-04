@@ -1,0 +1,55 @@
+{
+    "id": "sweller_1988",
+    "title": "Cognitive Load During Problem Solving: Effects on Learning",
+    "authors": [
+        "John Sweller"
+    ],
+    "year": 1988,
+    "source_type": "Journal Article (Cognitive Science)",
+    "core_concept": "Cognitive Load Theory",
+    "summary": "Working memory is limited. Learning and performance are hampered when 'extraneous' load (bad design, distractions) competes with 'intrinsic' load (the task itself). Good design minimizes extraneous load.",
+    "effectiveness_metrics": {
+        "metric": "Learning Efficiency",
+        "value": "High",
+        "description": "Reducing extraneous load directly improves the capacity for processing the actual task."
+    },
+    "mechanisms": [
+        {
+            "name": "Extraneous Load Reduction",
+            "description": "Removing non-essential information and distractions."
+        },
+        {
+            "name": "Split-Attention Effect",
+            "description": "Avoiding the need to split attention between disparate sources of information."
+        },
+        {
+            "name": "Germane Load Optimization",
+            "description": "Directing mental effort toward schema construction (learning)."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Minimalist UI Mode",
+            "logic": "IF [Focus_Active] THEN [Remove_All_Non_Essential_UI]",
+            "application_in_app": "During a focus block, strip the interface to the bare minimum (e.g., just the timer) to reduce extraneous cognitive load.",
+            "difficulty": "Low",
+            "tags": [
+                "ui-design",
+                "focus",
+                "cognitive-load",
+                "template"
+            ]
+        },
+        {
+            "name": "Single-Tasking Mandate",
+            "logic": "Present [One_Item] at a time",
+            "application_in_app": "Never show a list of 10 micro-activities. Show exactly one option with a 'Shuffle' button to prevent decision fatigue.",
+            "difficulty": "Low",
+            "tags": [
+                "ui-design",
+                "decision-making",
+                "template"
+            ]
+        }
+    ]
+}

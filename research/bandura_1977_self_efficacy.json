@@ -1,0 +1,55 @@
+{
+    "id": "bandura_1977",
+    "title": "Self-Efficacy: Toward a Unifying Theory of Behavioral Change",
+    "authors": [
+        "Albert Bandura"
+    ],
+    "year": 1977,
+    "source_type": "Journal Article (Psychological Review)",
+    "core_concept": "Self-Efficacy",
+    "summary": "Self-efficacy is the belief in one's ability to succeed. It is built primarily through 'mastery experiences' (small wins). High self-efficacy leads to greater persistence and resilience.",
+    "effectiveness_metrics": {
+        "metric": "Behavioral Persistence",
+        "value": "High",
+        "description": "People with high self-efficacy try harder and longer in the face of obstacles."
+    },
+    "mechanisms": [
+        {
+            "name": "Mastery Experiences",
+            "description": "Success breeds success. Small wins build the confidence needed for larger tasks."
+        },
+        {
+            "name": "Vicarious Experience",
+            "description": "Seeing others succeed (or a digital avatar) can boost belief."
+        },
+        {
+            "name": "Verbal Persuasion",
+            "description": "Encouragement from a credible source (the app)."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Small Wins Ladder",
+            "logic": "Start with [Easiest_Possible_Task] -> Incrementally [Increase_Difficulty]",
+            "application_in_app": "If a user fails a 20-min block, suggest a 5-min block next. Completing it restores self-efficacy through a 'mastery experience'.",
+            "difficulty": "Medium",
+            "tags": [
+                "motivation",
+                "resilience",
+                "adaptive",
+                "template"
+            ]
+        },
+        {
+            "name": "Credible Encouragement",
+            "logic": "Provide [Specific_Praise] based on [Actual_Data]",
+            "application_in_app": "Instead of generic 'Good job', say 'You focused for 15 minutes straight, which is 5 minutes longer than yesterday.'",
+            "difficulty": "Low",
+            "tags": [
+                "feedback",
+                "motivation",
+                "template"
+            ]
+        }
+    ]
+}

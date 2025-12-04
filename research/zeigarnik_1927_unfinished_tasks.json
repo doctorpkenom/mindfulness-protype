@@ -1,0 +1,55 @@
+{
+    "id": "zeigarnik_1927",
+    "title": "On Finished and Unfinished Tasks",
+    "authors": [
+        "Bluma Zeigarnik"
+    ],
+    "year": 1927,
+    "source_type": "Journal Article (Psychologische Forschung)",
+    "core_concept": "Zeigarnik Effect",
+    "summary": "People remember unfinished or interrupted tasks better than completed ones. The psychological tension of an incomplete task creates a drive to return to it and finish it.",
+    "effectiveness_metrics": {
+        "metric": "Recall & Re-engagement",
+        "value": "High",
+        "description": "Unfinished tasks remain active in working memory, creating a cognitive 'itch' that motivates resumption."
+    },
+    "mechanisms": [
+        {
+            "name": "Task Tension",
+            "description": "The cognitive unease created by an open loop."
+        },
+        {
+            "name": "Closure Drive",
+            "description": "The natural human desire to resolve tension by completing the task."
+        },
+        {
+            "name": "Interruption Benefit",
+            "description": "Strategic interruptions can actually increase the likelihood of returning to a task."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Cliffhanger Protocol",
+            "logic": "Interrupt [User_Task] at [High_Interest_Point] to promote [Return_Session]",
+            "application_in_app": "Encourage users to leave a task 'mid-sentence' or slightly unfinished at the end of a session to make starting the next session easier.",
+            "difficulty": "Medium",
+            "tags": [
+                "productivity",
+                "retention",
+                "initiation",
+                "template"
+            ]
+        },
+        {
+            "name": "Open Loop Visuals",
+            "logic": "Display [Incomplete_Progress_Bar] to trigger [Completion_Drive]",
+            "application_in_app": "Show a progress circle that is 90% full rather than empty to leverage the desire for visual closure.",
+            "difficulty": "Low",
+            "tags": [
+                "ui-design",
+                "motivation",
+                "template"
+            ]
+        }
+    ]
+}

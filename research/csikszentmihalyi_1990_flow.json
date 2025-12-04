@@ -1,0 +1,56 @@
+{
+    "id": "csikszentmihalyi_1990",
+    "title": "Flow: The Psychology of Optimal Experience",
+    "authors": [
+        "Mihaly Csikszentmihalyi"
+    ],
+    "year": 1990,
+    "source_type": "Book",
+    "core_concept": "Flow State",
+    "summary": "Flow is a state of optimal experience characterized by deep immersion and enjoyment. It occurs when there is a balance between the challenge of the task and the skill of the user, along with clear goals and immediate feedback.",
+    "effectiveness_metrics": {
+        "metric": "Engagement Level",
+        "value": "Optimal",
+        "description": "Flow represents the peak of intrinsic motivation and performance, where time perception is distorted and self-consciousness disappears."
+    },
+    "mechanisms": [
+        {
+            "name": "Challenge-Skill Balance",
+            "description": "The task must be difficult enough to be interesting but not so difficult as to cause anxiety."
+        },
+        {
+            "name": "Clear Goals",
+            "description": "The user must know exactly what needs to be done next."
+        },
+        {
+            "name": "Immediate Feedback",
+            "description": "The user must receive constant signals about how well they are doing."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Goldilocks Challenge Template",
+            "logic": "IF [User_Skill_High] THEN [Increase_Task_Difficulty] ELSE [Simplify_Task]",
+            "application_in_app": "Dynamically adjust the 'focus block' duration or the complexity of the micro-activity based on the user's current energy and past performance to keep them in the 'flow channel'.",
+            "difficulty": "High",
+            "tags": [
+                "engagement",
+                "flow",
+                "adaptive",
+                "template"
+            ]
+        },
+        {
+            "name": "Micro-Feedback Loop",
+            "logic": "Provide [Visual_Signal] immediately after [User_Action]",
+            "application_in_app": "Ensure every small interaction (e.g., completing a micro-task) has an immediate, satisfying visual or haptic response to maintain the feedback loop.",
+            "difficulty": "Low",
+            "tags": [
+                "ui-design",
+                "feedback",
+                "flow",
+                "template"
+            ]
+        }
+    ]
+}
