@@ -1,0 +1,53 @@
+{
+    "id": "loewenstein_1994",
+    "title": "The Psychology of Curiosity: A Review and Reinterpretation",
+    "authors": [
+        "George Loewenstein"
+    ],
+    "year": 1994,
+    "source_type": "Journal Article (Psychological Bulletin)",
+    "core_concept": "Information Gap Theory",
+    "summary": "Curiosity is a feeling of deprivation arising from a gap between what we know and what we want to know. This gap produces a drive (similar to hunger) to obtain the missing information.",
+    "effectiveness_metrics": {
+        "metric": "Dopamine Activation",
+        "value": "Confirmed (fMRI)",
+        "description": "Subsequent research (Kang et al., 2009) confirmed curiosity activates the brain's reward circuitry (SN/VTA) and enhances memory."
+    },
+    "mechanisms": [
+        {
+            "name": "Cognitive Deprivation",
+            "description": "The uncomfortable/itching feeling of not knowing something, which drives action."
+        },
+        {
+            "name": "Reward Prediction",
+            "description": "Closing the gap provides a hit of satisfaction (dopamine)."
+        },
+        {
+            "name": "Inverted-U",
+            "description": "Curiosity is highest when we know a little bit, but not everything (the 'zone of proximal development' for interest)."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Curiosity Bite",
+            "logic": "Present [partial_information] to create [gap]",
+            "application_in_app": "Instead of a blocker, show a card: 'Do you know the one weird reason [Topic] works? Click to see.' (Redirects to study material).",
+            "difficulty": "Low",
+            "tags": [
+                "engagement",
+                "reward",
+                "curiosity"
+            ]
+        },
+        {
+            "name": "Question-First Learning",
+            "logic": "Ask [question] before showing [answer]",
+            "application_in_app": "Prompt the user to guess the answer to a relevant question before starting work, priming the brain for learning.",
+            "difficulty": "Medium",
+            "tags": [
+                "learning",
+                "priming"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,53 @@
+{
+    "id": "sirois_2014",
+    "title": "Procrastination and Stress: Exploring the Role of Self-Compassion",
+    "authors": [
+        "Fuschia M. Sirois"
+    ],
+    "year": 2014,
+    "source_type": "Journal Article (Self and Identity)",
+    "core_concept": "Self-Compassion & Procrastination",
+    "summary": "Procrastination is linked to high stress and low self-compassion. The 'shame spiral' (feeling bad about procrastinating) drains the emotional resources needed to restart. Self-compassion breaks this loop.",
+    "effectiveness_metrics": {
+        "metric": "Stress Reduction",
+        "value": "Hedge's g = 0.67",
+        "description": "Significant reduction in stress and anxiety, which are key drivers of avoidance behaviors."
+    },
+    "mechanisms": [
+        {
+            "name": "Emotion Regulation",
+            "description": "Reducing the negative affect (guilt/shame) associated with task failure."
+        },
+        {
+            "name": "Growth Mindset",
+            "description": "Framing failure as a data point for learning rather than a character flaw."
+        },
+        {
+            "name": "Resource Restoration",
+            "description": "By not wasting energy on self-criticism, the user has more cognitive resources available to try again."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Non-Judgmental Reflection",
+            "logic": "Ask [neutral_question] instead of [judgmental_question]",
+            "application_in_app": "After a drift, ask 'What happened?' or 'How was the focus?' instead of 'Why did you fail?' or 'You missed your goal.'",
+            "difficulty": "Low",
+            "tags": [
+                "retention",
+                "emotion",
+                "reflection"
+            ]
+        },
+        {
+            "name": "Fresh Start Framing",
+            "logic": "Reset [state] immediately after [failure]",
+            "application_in_app": "If a streak is broken, allow a 'repair' action or simply start a new day without a heavy penalty screen.",
+            "difficulty": "Low",
+            "tags": [
+                "gamification",
+                "motivation"
+            ]
+        }
+    ]
+}

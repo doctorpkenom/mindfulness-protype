@@ -1,0 +1,53 @@
+{
+    "id": "barkley_1997",
+    "title": "Behavioral Inhibition, Sustained Attention, and Executive Functions",
+    "authors": [
+        "Russell A. Barkley"
+    ],
+    "year": 1997,
+    "source_type": "Journal Article (Psychological Bulletin)",
+    "core_concept": "Executive Function Scaffolding",
+    "summary": "ADHD is a disorder of self-regulation and executive functions (working memory, inhibition, planning). The most effective intervention is to 'externalize' these functions—putting the structure into the environment rather than relying on the brain.",
+    "effectiveness_metrics": {
+        "metric": "Clinical Consensus",
+        "value": "Gold Standard",
+        "description": "Externalizing cues (Point-of-Performance) is widely accepted as the primary non-pharmacological management strategy for ADHD."
+    },
+    "mechanisms": [
+        {
+            "name": "Externalization",
+            "description": "Offloading mental tasks (remembering time, holding a goal in mind) to physical/digital tools."
+        },
+        {
+            "name": "Point-of-Performance",
+            "description": "Interventions must happen *at the exact time and place* the behavior is needed, not in advance."
+        },
+        {
+            "name": "Time Blindness Compensation",
+            "description": "Making time physical and visible (e.g., visual timers) to counter the inability to sense its passing."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Visual Timer",
+            "logic": "Display [time] as [visual_quantity]",
+            "application_in_app": "Use a countdown bar or pie chart that visually shrinks, rather than just digital numbers, to make time concrete.",
+            "difficulty": "Low",
+            "tags": [
+                "scaffolding",
+                "time-management",
+                "adhd"
+            ]
+        },
+        {
+            "name": "Next-Step Prompt",
+            "logic": "Isolate [next_immediate_action] from [project]",
+            "application_in_app": "When a focus block starts, ask: 'What is the very first sentence you will write?' (Forces concrete planning).",
+            "difficulty": "Medium",
+            "tags": [
+                "planning",
+                "executive-function"
+            ]
+        }
+    ]
+}

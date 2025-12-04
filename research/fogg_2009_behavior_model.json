@@ -1,0 +1,53 @@
+{
+    "id": "fogg_2009",
+    "title": "A Behavior Model for Persuasive Design",
+    "authors": [
+        "B.J. Fogg"
+    ],
+    "year": 2009,
+    "source_type": "Conference Paper (Persuasive '09)",
+    "core_concept": "Fogg Behavior Model (B=MAP)",
+    "summary": "Behavior happens when Motivation, Ability, and a Prompt converge. If a behavior doesn't happen, one of these three is missing. To increase behavior, it is often easier to increase Ability (make it simpler) than to increase Motivation.",
+    "effectiveness_metrics": {
+        "metric": "Task Completion Rate",
+        "value": "High (up to 94% in applied studies)",
+        "description": "Reducing friction/increasing ability is consistently more reliable than relying on willpower/motivation."
+    },
+    "mechanisms": [
+        {
+            "name": "Ability/Simplicity",
+            "description": "The easier a behavior is, the less motivation is required to do it."
+        },
+        {
+            "name": "Prompting",
+            "description": "A trigger must occur *at the moment* the user has both the ability and motivation."
+        },
+        {
+            "name": "Tiny Habits",
+            "description": "Scaling a behavior down to its smallest possible unit (e.g., 'floss one tooth') to bypass motivation hurdles."
+        }
+    ],
+    "actionable_strategies": [
+        {
+            "name": "Micro-Activity Scaling",
+            "logic": "Reduce [target_behavior] to [30-second_version]",
+            "application_in_app": "Instead of 'Study for 1 hour', suggest 'Open the textbook to page 1'.",
+            "difficulty": "Very Low",
+            "tags": [
+                "ability",
+                "initiation",
+                "simplicity"
+            ]
+        },
+        {
+            "name": "Prompt Timing",
+            "logic": "Trigger [prompt] when [ability] is high",
+            "application_in_app": "Show the prompt exactly when the user is 'drifting' (idle), not when they are deep in a different app.",
+            "difficulty": "Low",
+            "tags": [
+                "prompt",
+                "timing"
+            ]
+        }
+    ]
+}

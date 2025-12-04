@@ -1,0 +1,44 @@
+{
+  "id": "gollwitzer_1999",
+  "title": "Implementation Intentions: Strong Effects of Simple Plans",
+  "authors": ["Peter M. Gollwitzer"],
+  "year": 1999,
+  "source_type": "Journal Article (American Psychologist)",
+  "core_concept": "Implementation Intentions",
+  "summary": "Goal intentions ('I intend to reach Z') are often insufficient for action. Implementation intentions ('If situation X arises, then I will perform response Y') link a specific cue to a specific response, automating the initiation of the behavior.",
+  "effectiveness_metrics": {
+    "metric": "Cohen's d",
+    "value": 0.65,
+    "description": "Medium-to-large effect size on goal attainment compared to goal intentions alone (based on subsequent meta-analysis by Gollwitzer & Sheeran, 2006)."
+  },
+  "mechanisms": [
+    {
+      "name": "Cue Accessibility",
+      "description": "The mental representation of the situational cue becomes highly activated and accessible."
+    },
+    {
+      "name": "Automatization",
+      "description": "The response to the cue becomes immediate, efficient, and requires no conscious intent once the plan is set."
+    },
+    {
+      "name": "Cognitive Offloading",
+      "description": "Reduces the 'decision fatigue' of deciding what to do in the moment."
+    }
+  ],
+  "actionable_strategies": [
+    {
+      "name": "If-Then Trigger",
+      "logic": "IF [specific_distraction_cue] THEN [specific_micro_action]",
+      "application_in_app": "User configures: 'If I open Instagram (Cue), Then show me a 1-min breathing exercise (Action).'",
+      "difficulty": "Low",
+      "tags": ["initiation", "trigger", "automation"]
+    },
+    {
+      "name": "Obstacle Planning",
+      "logic": "IF [anticipated_obstacle] THEN [coping_response]",
+      "application_in_app": "Pre-mortem setup: 'If I feel too tired to focus, Then I will just do 2 minutes of organizing.'",
+      "difficulty": "Medium",
+      "tags": ["resilience", "planning"]
+    }
+  ]
+}
