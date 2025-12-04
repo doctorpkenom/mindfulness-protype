@@ -15,7 +15,9 @@ class ResearchEngine:
         self.research_dir = os.path.join(script_dir, research_dir)
         self.modules: List[Dict[str, Any]] = []
         self.strategies: List[Dict[str, Any]] = []
+        self.adaptation_rules: Dict[str, Any] = {}
         self._load_modules()
+        self._load_adaptation_rules()
 
     def _load_modules(self):
         """
@@ -61,19 +63,64 @@ class ResearchEngine:
         """
         return [s for s in self.strategies if s.get("difficulty", "").lower() == difficulty.lower()]
 
+    def _load_adaptation_rules(self):
+        """
+        Loads the heuristic rules for adapting to unknown contexts.
+        """
+        rules_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "adaptation_rules.json")
+        if os.path.exists(rules_path):
+            try:
+                with open(rules_path, 'r', encoding='utf-8') as f:
+                    self.adaptation_rules = json.load(f)
+                print(f"  [+] Loaded adaptation rules")
+            except Exception as e:
+                print(f"  [!] Error loading adaptation rules: {e}")
+        else:
+            print("  [!] Adaptation rules file not found.")
+            self.adaptation_rules = {}
+
+    def adapt_plan(self, plan: Dict[str, Any], user_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Refines a plan based on user context using the loaded heuristics.
+        """
+        if not self.adaptation_rules or not user_context:
+            return plan
+
+        heuristics = self.adaptation_rules.get("adaptation_heuristics", [])
+        
+        # Example: Check for low energy
+        if user_context.get("energy") == "low":
+            for rule in heuristics:
+                if rule["condition"] == "User has low energy":
+                    plan["adaptation_note"] = f"Applied rule: {rule['modification']} ({rule['source_principle']})"
+                    # Logic to actually modify steps would go here
+                    # For now, we just tag it
+                    break
+        
+        # Example: Check for high stress (Fallback Logic)
+        if user_context.get("stress") == "high":
+             fallback = self.adaptation_rules.get("fallback_logic", {}).get("high_stress_detected")
+             if fallback:
+                 # Insert a stress-relief step at the start
+                 plan["steps"].insert(0, {
+                     "phase": "Emergency Regulation",
+                     "strategy": fallback["strategy"],
+                     "rationale": fallback["rationale"]
+                 })
+
+        return plan
+
     def generate_composite_plan(self, user_context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Generates a 'scheme' or plan by combining bits and pieces from different research papers.
+        Now includes an adaptation phase.
         
         Args:
-            user_context (Dict): Placeholder for future user data (e.g., current state, goals).
+            user_context (Dict): User data (e.g., {'energy': 'low', 'stress': 'high'}).
         
         Returns:
             Dict: A structured plan containing a Trigger, Action, and Retention strategy.
         """
-        # NOTE: In a real scenario, this would use logic or LLM to select the *best* combo based on context.
-        # For now, we will construct a "Standard Intervention" using our known best-practices.
-        
         # 1. Find a Trigger strategy (Gollwitzer)
         triggers = self.get_strategies_by_tag("trigger")
         selected_trigger = triggers[0] if triggers else None
@@ -116,6 +163,10 @@ class ResearchEngine:
                 "source": selected_reflection["source_title"]
             })
 
+        # Apply Adaptation Layer
+        if user_context:
+            plan = self.adapt_plan(plan, user_context)
+
         return plan
 
 if __name__ == "__main__":
@@ -128,7 +179,11 @@ if __name__ == "__main__":
     for s in curiosity_strats:
         print(f" - {s['name']} (from {s['source_id']})")
 
-    print("\n--- Generating Composite Plan ---")
-    # Simulating a request for a plan
+    print("\n--- Generating Composite Plan (Normal) ---")
     plan = engine.generate_composite_plan()
     print(json.dumps(plan, indent=2))
+
+    print("\n--- Generating Composite Plan (High Stress Context) ---")
+    context = {"stress": "high", "energy": "low"}
+    adapted_plan = engine.generate_composite_plan(user_context=context)
+    print(json.dumps(adapted_plan, indent=2))

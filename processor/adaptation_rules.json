@@ -1,0 +1,49 @@
+{
+    "meta": {
+        "description": "Heuristic rules for adapting research strategies to novel or ambiguous user contexts.",
+        "version": "1.0"
+    },
+    "fallback_logic": {
+        "unknown_context": {
+            "priority": "Low Difficulty",
+            "strategy": "Micro-Activity Scaling Template",
+            "rationale": "When in doubt, lower the barrier to entry. Simplicity (Fogg) is the safest default."
+        },
+        "high_stress_detected": {
+            "priority": "Emotion Regulation",
+            "strategy": "Neutral Reflection Template",
+            "rationale": "If stress is high, cognitive load is compromised. Prioritize self-compassion (Sirois) over productivity to prevent burnout."
+        },
+        "repeated_failure": {
+            "priority": "Scaffolding",
+            "strategy": "Small Wins Ladder",
+            "rationale": "If the user keeps failing, their self-efficacy is likely damaged. Switch to Bandura's 'Mastery Experiences' to rebuild confidence."
+        }
+    },
+    "adaptation_heuristics": [
+        {
+            "condition": "User has low energy",
+            "modification": "Reduce all time-based goals by 50%",
+            "source_principle": "Fogg Behavior Model (Ability)"
+        },
+        {
+            "condition": "User is bored/seeking novelty",
+            "modification": "Inject 'Curiosity Gap' strategies into the trigger phase",
+            "source_principle": "Information Gap Theory (Loewenstein)"
+        },
+        {
+            "condition": "User is overwhelmed/anxious",
+            "modification": "Hide all future tasks; show only the immediate next step",
+            "source_principle": "Cognitive Load Theory (Sweller)"
+        },
+        {
+            "condition": "User breaks a long streak",
+            "modification": "Trigger 'Fresh Start Protocol' immediately; suppress any 'streak lost' visuals",
+            "source_principle": "Habit Formation (Lally) & Self-Compassion (Sirois)"
+        }
+    ],
+    "synthesis_rules": {
+        "conflict_resolution": "If a strategy increases cognitive load (e.g., complex planning) but the user context is 'tired', the 'Cognitive Load' rule overrides the 'Planning' rule.",
+        "combination_limit": "Do not combine more than 2 distinct strategies in a single intervention to avoid decision fatigue."
+    }
+}

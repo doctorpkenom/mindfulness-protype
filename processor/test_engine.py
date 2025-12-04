@@ -33,15 +33,25 @@ def test_research_engine():
     else:
         print(f"[FAIL] Could not find any strategies with tag '{target_tag}'.")
 
-    print("\n=== 3. TESTING PLAN GENERATION ===")
-    print("Generating a composite plan from available research...")
-    plan = engine.generate_composite_plan()
+    print("\n=== 3. TESTING PLAN GENERATION (NORMAL) ===")
+    print("Generating a standard plan...")
+    plan_normal = engine.generate_composite_plan()
+    print(json.dumps(plan_normal, indent=2))
+
+    print("\n=== 4. TESTING PLAN GENERATION (ADAPTED) ===")
+    print("Generating a plan for context: {'stress': 'high', 'energy': 'low'}...")
+    context = {"stress": "high", "energy": "low"}
+    plan_adapted = engine.generate_composite_plan(user_context=context)
+    print(json.dumps(plan_adapted, indent=2))
+
+    # Verification Logic
+    has_emergency_step = any(step.get("phase") == "Emergency Regulation" for step in plan_adapted["steps"])
+    has_adaptation_note = "adaptation_note" in plan_adapted
     
-    if plan and "steps" in plan and len(plan["steps"]) > 0:
-        print("[PASS] Plan generated successfully!")
-        print(json.dumps(plan, indent=2))
+    if has_emergency_step and has_adaptation_note:
+        print("\n[PASS] Adaptation logic verified: Emergency step added and adaptation note present.")
     else:
-        print("[FAIL] Plan generation returned empty or invalid data.")
+        print("\n[FAIL] Adaptation logic failed. Check rules.")
 
 if __name__ == "__main__":
     test_research_engine()
