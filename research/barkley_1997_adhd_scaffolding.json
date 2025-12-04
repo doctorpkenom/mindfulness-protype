@@ -29,24 +29,26 @@
     ],
     "actionable_strategies": [
         {
-            "name": "Visual Timer",
-            "logic": "Display [time] as [visual_quantity]",
-            "application_in_app": "Use a countdown bar or pie chart that visually shrinks, rather than just digital numbers, to make time concrete.",
+            "name": "Visual Time Scaffolding",
+            "logic": "Represent [Time_Remaining] as [Diminishing_Visual_Object]",
+            "application_in_app": "Convert abstract time (numbers) into concrete visual space (e.g., a shrinking bar, a closing circle) to externalize the sensing of time passing.",
             "difficulty": "Low",
             "tags": [
                 "scaffolding",
                 "time-management",
-                "adhd"
+                "adhd",
+                "template"
             ]
         },
         {
-            "name": "Next-Step Prompt",
-            "logic": "Isolate [next_immediate_action] from [project]",
-            "application_in_app": "When a focus block starts, ask: 'What is the very first sentence you will write?' (Forces concrete planning).",
+            "name": "Next-Action Isolation",
+            "logic": "Isolate [Single_Immediate_Step] from [Complex_Project]",
+            "application_in_app": "Force the user to define ONLY the very first physical action (e.g., 'Open document') before allowing them to see the full to-do list.",
             "difficulty": "Medium",
             "tags": [
                 "planning",
-                "executive-function"
+                "executive-function",
+                "template"
             ]
         }
     ]

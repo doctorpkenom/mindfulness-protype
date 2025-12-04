@@ -29,24 +29,26 @@
     ],
     "actionable_strategies": [
         {
-            "name": "Curiosity Bite",
-            "logic": "Present [partial_information] to create [gap]",
-            "application_in_app": "Instead of a blocker, show a card: 'Do you know the one weird reason [Topic] works? Click to see.' (Redirects to study material).",
+            "name": "Curiosity Gap Template",
+            "logic": "Present [Partial_Insight_Related_To_User_Goal] to create [Cognitive_Itch]",
+            "application_in_app": "Dynamically generate a 'teaser' question related to the user's stated work topic. The answer is revealed only after they engage with the app.",
             "difficulty": "Low",
             "tags": [
                 "engagement",
                 "reward",
-                "curiosity"
+                "curiosity",
+                "template"
             ]
         },
         {
-            "name": "Question-First Learning",
-            "logic": "Ask [question] before showing [answer]",
-            "application_in_app": "Prompt the user to guess the answer to a relevant question before starting work, priming the brain for learning.",
+            "name": "Prediction Priming",
+            "logic": "Ask [User_To_Predict_Outcome] before showing [Actual_Data]",
+            "application_in_app": "Before a study session, ask the user to guess a fact or outcome related to their material. This primes the brain to seek the answer.",
             "difficulty": "Medium",
             "tags": [
                 "learning",
-                "priming"
+                "priming",
+                "template"
             ]
         }
     ]

@@ -29,24 +29,26 @@
     ],
     "actionable_strategies": [
         {
-            "name": "Micro-Activity Scaling",
-            "logic": "Reduce [target_behavior] to [30-second_version]",
-            "application_in_app": "Instead of 'Study for 1 hour', suggest 'Open the textbook to page 1'.",
+            "name": "Micro-Activity Scaling Template",
+            "logic": "Reduce [User_Goal_Task] to [Minimum_Viable_Action_30s]",
+            "application_in_app": "Algorithmically or manually break down any large user task into a <2 minute starter step. The goal is solely initiation, not completion.",
             "difficulty": "Very Low",
             "tags": [
                 "ability",
                 "initiation",
-                "simplicity"
+                "simplicity",
+                "template"
             ]
         },
         {
-            "name": "Prompt Timing",
-            "logic": "Trigger [prompt] when [ability] is high",
-            "application_in_app": "Show the prompt exactly when the user is 'drifting' (idle), not when they are deep in a different app.",
+            "name": "Context-Aware Prompting",
+            "logic": "Trigger [Intervention] when [User_Context_Is_Idle_Or_Drifting]",
+            "application_in_app": "Use system usage stats to detect 'low-focus' moments (e.g., rapid switching, idle time) to insert the prompt when cognitive load is naturally low.",
             "difficulty": "Low",
             "tags": [
                 "prompt",
-                "timing"
+                "timing",
+                "context-aware"
             ]
         }
     ]

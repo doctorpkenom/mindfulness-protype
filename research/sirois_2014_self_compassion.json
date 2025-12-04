@@ -29,24 +29,26 @@
     ],
     "actionable_strategies": [
         {
-            "name": "Non-Judgmental Reflection",
-            "logic": "Ask [neutral_question] instead of [judgmental_question]",
-            "application_in_app": "After a drift, ask 'What happened?' or 'How was the focus?' instead of 'Why did you fail?' or 'You missed your goal.'",
+            "name": "Neutral Reflection Template",
+            "logic": "Query [User_Performance] using [Non_Judgmental_Data_Language]",
+            "application_in_app": "Frame all feedback as objective data points (e.g., '3 drifts detected') rather than moral judgments (e.g., 'You failed to focus').",
             "difficulty": "Low",
             "tags": [
                 "retention",
                 "emotion",
-                "reflection"
+                "reflection",
+                "template"
             ]
         },
         {
-            "name": "Fresh Start Framing",
-            "logic": "Reset [state] immediately after [failure]",
-            "application_in_app": "If a streak is broken, allow a 'repair' action or simply start a new day without a heavy penalty screen.",
+            "name": "Fresh Start Protocol",
+            "logic": "Reset [User_State_And_Metrics] immediately after [Session_End_Or_Lapse]",
+            "application_in_app": "Ensure that a lapse in one session does not visually 'taint' the next session. Every new block starts with a clean slate to prevent the 'what-the-hell' effect.",
             "difficulty": "Low",
             "tags": [
                 "gamification",
-                "motivation"
+                "motivation",
+                "template"
             ]
         }
     ]
