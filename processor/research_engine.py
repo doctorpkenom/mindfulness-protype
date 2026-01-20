@@ -1,11 +1,12 @@
 import json
 import os
 from typing import List, Dict, Any, Optional
+from processor.research_metadata import ResearchIndexer, ResearchMetadata
 
 class ResearchEngine:
     def __init__(self, research_dir: str = "../research"):
         """
-        Initialize the ResearchEngine.
+        Initialize the ResearchEngine with enhanced ML integration.
         
         Args:
             research_dir (str): Path to the directory containing research JSON modules.
@@ -18,6 +19,9 @@ class ResearchEngine:
         self.adaptation_rules: Dict[str, Any] = {}
         self._load_modules()
         self._load_adaptation_rules()
+        
+        # Initialize enhanced indexer
+        self.indexer = ResearchIndexer(research_dir)
 
     def _load_modules(self):
         """

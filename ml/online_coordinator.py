@@ -10,30 +10,40 @@ from ml.models.habit_optimizer import HabitOptimizer
 from ml.models.stress_predictor import StressPredictor
 from ml.models.curiosity_tuner import CuriosityTuner
 from ml.models.flow_manager import FlowManager
+from ml.models.attention_manager import AttentionManager
+from ml.models.motivation_booster import MotivationBooster
+from ml.models.zeigarnik_tracker import ZeigarnikTracker
 from data_pipeline.preprocessor import DataPreprocessor
 
 class OnlineCoordinator:
     """
     The 'Boss'. Receives user context, queries the Council of Experts, 
     and uses a weighted voting system to select the best strategy.
+    Enhanced with 7 expert models for comprehensive decision-making.
     """
     def __init__(self):
         self.preprocessor = DataPreprocessor()
         
-        # The Council
+        # The Expanded Council of Experts
         self.experts = [
-            HabitOptimizer(),
-            StressPredictor(),
-            CuriosityTuner(),
-            FlowManager()
+            HabitOptimizer(),           # Consistency & streaks
+            StressPredictor(),          # Burnout prevention
+            CuriosityTuner(),           # Engagement & exploration
+            FlowManager(),              # Optimal challenge
+            AttentionManager(),         # Focus & task switching
+            MotivationBooster(),        # Intrinsic motivation (SDT)
+            ZeigarnikTracker()          # Task completion psychology
         ]
         
-        # How much we trust each expert (could be learned over time)
+        # Expert trust weights (dynamically adjustable)
         self.expert_weights = {
             "habit_optimizer": 1.0,
-            "stress_predictor": 1.5, # Safety first
+            "stress_predictor": 1.8,    # Highest priority - safety first
             "curiosity_tuner": 1.0,
-            "flow_manager": 1.2
+            "flow_manager": 1.2,
+            "attention_manager": 1.1,    # Important for focus
+            "motivation_booster": 1.3,   # SDT is core to success
+            "zeigarnik_tracker": 0.9     # Supporting role
         }
 
     def select_strategy(self, user_context, available_strategies):

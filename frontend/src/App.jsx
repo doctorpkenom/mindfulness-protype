@@ -1,25 +1,24 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Users, FlaskConical, PlayCircle, Activity, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Users, FlaskConical, PlayCircle, Activity, Sun, Moon, Settings } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
 import UserTab from './components/UserTab';
 import PilotTab from './components/PilotTab';
 import SimulationTab from './components/SimulationTab';
+import DashboardTab from './components/DashboardTab';
+import DebugTab from './components/DebugTab';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('pilot');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const { isDark, toggleTheme } = useTheme();
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'users': return <UserTab />;
+      case 'dashboard': return <DashboardTab />;
       case 'pilot': return <PilotTab />;
+      case 'users': return <UserTab />;
       case 'simulation': return <SimulationTab />;
-      case 'dashboard': return (
-        <div className={`p-8 text-center ${isDark ? 'text-neutral-500' : 'text-slate-500'}`}>
-          Dashboard Coming Soon
-        </div>
-      );
-      default: return <PilotTab />;
+      case 'debug': return <DebugTab />;
+      default: return <DashboardTab />;
     }
   };
 
@@ -74,6 +73,7 @@ function App() {
           <NavItem id="pilot" label="Live Pilot" icon={PlayCircle} />
           <NavItem id="users" label="User Manager" icon={Users} />
           <NavItem id="simulation" label="Simulation Lab" icon={FlaskConical} />
+          <NavItem id="debug" label="Debug & Settings" icon={Settings} />
         </nav>
 
         {/* Theme Toggle */}
