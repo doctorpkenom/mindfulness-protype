@@ -1,8 +1,9 @@
 {
-  "name": "frontend",
+  "name": "mindfulness-prototype-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
   "type": "module",
+  "description": "Modern dual-theme frontend for the Mindfulness Prototype with AMOLED dark mode and calming light mode",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

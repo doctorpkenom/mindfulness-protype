@@ -17,23 +17,46 @@ The system is composed of four main layers:
 *   **Context-Aware:** Adapts strategies based on user energy, stress, and time of day.
 *   **Ensemble Learning:** Uses a weighted voting system of specialized models to balance productivity (Flow) with well-being (Self-Compassion).
 *   **Generalized Templates:** Strategies are abstract templates (e.g., `IF [Trigger] THEN [Action]`) that can be filled with specific user data.
+*   **Modern Dual-Theme UI:** Beautiful dark mode (AMOLED black with purple/pink accents) and light mode (green/lilac palette) with smooth transitions.
 
 ## Setup & Usage
 
-1.  **Install Dependencies:**
+### Backend Setup
+
+1.  **Install Python Dependencies:**
     ```bash
     pip install -r requirements.txt
     ```
-    *(Note: Requires `numpy`)*
 
-2.  **Run the ML Simulation:**
-    To see the "Council of Experts" in action:
+2.  **Run the Backend API:**
+    ```bash
+    uvicorn backend.main:app --reload --port 8000
+    ```
+
+### Frontend Setup
+
+1.  **Install Node Dependencies:**
+    ```bash
+    cd frontend
+    npm install
+    ```
+
+2.  **Run the Development Server:**
+    ```bash
+    npm run dev
+    ```
+
+3.  **Access the App:**
+    Open your browser to `http://localhost:5173`
+
+### Testing ML Components
+
+*   **Run the ML Simulation:**
     ```bash
     python ml/online_coordinator.py
     ```
 
-3.  **Run the Research Engine Test:**
-    To verify the loading of research modules:
+*   **Run the Research Engine Test:**
     ```bash
     python processor/test_engine.py
     ```
@@ -44,3 +67,25 @@ The system is composed of four main layers:
 *   `processor/`: Logic for parsing research and generating plans.
 *   `ml/`: The Machine Learning brains (Coordinator + Expert Models).
 *   `data_pipeline/`: Data preprocessing and feature engineering.
+*   `backend/`: FastAPI REST API with routers for users, research, and simulation.
+*   `frontend/`: Modern React + Vite + TailwindCSS web interface with dual-theme support.
+*   `simulated_testing/`: User persona simulation and testing framework.
+
+## Tech Stack
+
+**Backend:**
+*   FastAPI (Python)
+*   NumPy for ML operations
+*   Pydantic for data validation
+
+**Frontend:**
+*   React 18 + Vite
+*   TailwindCSS for styling
+*   Recharts for data visualization
+*   Lucide React for icons
+*   Context API for theme management
+
+**Machine Learning:**
+*   Custom ensemble architecture
+*   Thompson Sampling for exploration
+*   Real-time adaptive learning

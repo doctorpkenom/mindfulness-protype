@@ -4,6 +4,41 @@
 
 @layer base {
   body {
+    @apply transition-colors duration-300;
+  }
+  
+  /* Dark mode styles */
+  .dark body {
+    @apply bg-black text-white;
+  }
+  
+  /* Light mode styles */
+  .light body {
     @apply bg-slate-50 text-slate-900;
+  }
+}
+
+@layer utilities {
+  /* Smooth transitions for theme changes */
+  .theme-transition {
+    @apply transition-all duration-300 ease-in-out;
+  }
+  
+  /* Glass morphism effects */
+  .glass-dark {
+    @apply bg-neutral-950/30 backdrop-blur-xl border border-neutral-800/50;
+  }
+  
+  .glass-light {
+    @apply bg-white/70 backdrop-blur-xl border border-slate-200/50;
+  }
+  
+  /* Gradient text effects */
+  .gradient-text-dark {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400;
+  }
+  
+  .gradient-text-light {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600;
   }
 }
