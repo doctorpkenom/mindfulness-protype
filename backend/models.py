@@ -165,10 +165,15 @@ class ScheduleResponse(BaseModel):
 class TimerStartRequest(BaseModel):
     task_id: Optional[int] = None
     duration_seconds: int  # e.g., 1500 for 25 minutes
+    name: Optional[str] = None  # Optional timer name
+
+class TimerUpdateRequest(BaseModel):
+    name: Optional[str] = None
 
 class TimerResponse(BaseModel):
     id: int
     task_id: Optional[int]
+    name: Optional[str] = None
     duration_seconds: int
     actual_seconds: Optional[int]
     status: str

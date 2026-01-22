@@ -270,6 +270,7 @@ class TimerSession(Base):
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True, index=True)
     
     # Timer details
+    name = Column(String(200), nullable=True)  # Optional timer name
     duration_seconds = Column(Integer, nullable=False)  # Planned duration
     actual_seconds = Column(Integer, nullable=True)  # Actual duration (if completed)
     

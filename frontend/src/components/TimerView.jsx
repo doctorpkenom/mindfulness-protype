@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Clock, Pause, Play, Plus, Square } from 'lucide-react';
+import { Check, Clock, Edit2, Pause, Play, Plus, Square, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -12,9 +12,11 @@ export default function TimerView() {
   const [timerHours, setTimerHours] = useState(0);
   const [timerMinutes, setTimerMinutes] = useState(25);
   const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerName, setTimerName] = useState('');
   const [tasks, setTasks] = useState([]);
   const [showNewTimerForm, setShowNewTimerForm] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null); // Track which input is focused
+  const [editingTimerName, setEditingTimerName] = useState(null); // Track which timer name is being edited
   const intervalRef = useRef(null);
   const hoursInputRef = useRef(null);
   const minutesInputRef = useRef(null);
@@ -29,9 +31,8 @@ export default function TimerView() {
       // Show notification or alert
       if (timer) {
         const task = timer.task_id ? tasks.find(t => t.id === timer.task_id) : null;
-        const message = task 
-          ? `Timer completed! "${task.title}" finished.`
-          : 'Focus session complete!';
+        const timerDisplayName = timer.name || (task ? task.title : 'Timer');
+        const message = `Timer "${timerDisplayName}" completed!`;
         alert(message);
       }
     } catch (error) {
@@ -228,7 +229,8 @@ export default function TimerView() {
       
       const response = await axios.post(`${API_BASE_URL}/api/timer/start`, {
         task_id: taskId,
-        duration_seconds: durationSeconds
+        duration_seconds: durationSeconds,
+        name: timerName || null
       });
       
       console.log('Timer created:', response.data);
@@ -322,6 +324,19 @@ export default function TimerView() {
     }
   };
 
+  const handleUpdateTimerName = async (timerId, newName) => {
+    try {
+      await axios.put(`${API_BASE_URL}/api/timer/${timerId}`, {
+        name: newName || null
+      });
+      await loadActiveTimers();
+      setEditingTimerName(null);
+    } catch (error) {
+      console.error('Failed to update timer name:', error);
+      alert(error.response?.data?.detail || 'Failed to update timer name');
+    }
+  };
+
   const formatTime = (seconds) => {
     if (seconds === undefined || seconds === null) return '00:00:00';
     const hours = Math.floor(seconds / 3600);
@@ -368,6 +383,26 @@ export default function TimerView() {
           isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-slate-200'
         }`}>
           <div className="space-y-6">
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${
+                isDark ? 'text-neutral-300' : 'text-slate-700'
+              }`}>
+                Timer Name (Optional)
+              </label>
+              <input
+                type="text"
+                value={timerName}
+                onChange={(e) => setTimerName(e.target.value)}
+                placeholder="e.g., Focus Session, Break Time..."
+                className={`w-full px-4 py-2 rounded-lg border ${
+                  isDark
+                    ? 'bg-neutral-900 border-neutral-700 text-white placeholder-neutral-500'
+                    : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
+                } focus:outline-none focus:ring-2 ${
+                  isDark ? 'focus:ring-purple-500' : 'focus:ring-emerald-500'
+                }`}
+              />
+            </div>
             <div>
               <label className={`block text-sm font-medium mb-4 text-center ${
                 isDark ? 'text-neutral-300' : 'text-slate-700'
@@ -643,6 +678,7 @@ export default function TimerView() {
                   setTimerHours(0);
                   setTimerMinutes(25);
                   setTimerSeconds(0);
+                  setTimerName('');
                 }}
                 className={`px-6 py-3 rounded-lg font-medium border ${
                   isDark
@@ -680,25 +716,89 @@ export default function TimerView() {
               }`}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    {task ? (
-                      <h3 className={`font-semibold mb-1 ${
-                        isDark ? 'text-white' : 'text-slate-900'
-                      }`}>
-                        {task.title}
-                      </h3>
+                    {editingTimerName === timer.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          defaultValue={timer.name || ''}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleUpdateTimerName(timer.id, e.target.value);
+                            } else if (e.key === 'Escape') {
+                              setEditingTimerName(null);
+                            }
+                          }}
+                          autoFocus
+                          className={`flex-1 px-2 py-1 rounded border text-sm ${
+                            isDark
+                              ? 'bg-neutral-900 border-neutral-700 text-white'
+                              : 'bg-slate-50 border-slate-300 text-slate-900'
+                          } focus:outline-none focus:ring-2 ${
+                            isDark ? 'focus:ring-purple-500' : 'focus:ring-emerald-500'
+                          }`}
+                        />
+                        <button
+                          onClick={(e) => {
+                            const input = e.target.parentElement.querySelector('input');
+                            handleUpdateTimerName(timer.id, input.value);
+                          }}
+                          className={`p-1 rounded ${
+                            isDark
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                              : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                          }`}
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button
+                          onClick={() => setEditingTimerName(null)}
+                          className={`p-1 rounded ${
+                            isDark
+                              ? 'bg-neutral-700 hover:bg-neutral-600 text-white'
+                              : 'bg-slate-300 hover:bg-slate-400 text-slate-700'
+                          }`}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
                     ) : (
-                      <h3 className={`font-semibold mb-1 ${
-                        isDark ? 'text-neutral-400' : 'text-slate-600'
-                      }`}>
-                        Focus Timer
-                      </h3>
-                    )}
-                    {task && (
-                      <p className={`text-xs ${
-                        isDark ? 'text-neutral-500' : 'text-slate-500'
-                      }`}>
-                        Estimated: {task.estimated_minutes} min
-                      </p>
+                      <>
+                        {timer.name ? (
+                          <h3 className={`font-semibold mb-1 ${
+                            isDark ? 'text-white' : 'text-slate-900'
+                          }`}>
+                            {timer.name}
+                          </h3>
+                        ) : task ? (
+                          <h3 className={`font-semibold mb-1 ${
+                            isDark ? 'text-white' : 'text-slate-900'
+                          }`}>
+                            {task.title}
+                          </h3>
+                        ) : (
+                          <h3 className={`font-semibold mb-1 ${
+                            isDark ? 'text-neutral-400' : 'text-slate-600'
+                          }`}>
+                            Focus Timer
+                          </h3>
+                        )}
+                        {task && (
+                          <p className={`text-xs ${
+                            isDark ? 'text-neutral-500' : 'text-slate-500'
+                          }`}>
+                            Estimated: {task.estimated_minutes} min
+                          </p>
+                        )}
+                        <button
+                          onClick={() => setEditingTimerName(timer.id)}
+                          className={`mt-1 text-xs flex items-center gap-1 ${
+                            isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          <Edit2 size={12} />
+                          {timer.name ? 'Edit name' : 'Add name'}
+                        </button>
+                      </>
                     )}
                   </div>
                   {isPaused && (
