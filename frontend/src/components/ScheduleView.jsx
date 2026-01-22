@@ -3,6 +3,7 @@ import { Calendar, Clock, Zap, Sparkles } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import axios from 'axios';
 import LoadingSpinner from './LoadingSpinner';
+import DatePicker from './DatePicker';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -55,9 +56,11 @@ export default function ScheduleView() {
       });
       setSchedule(response.data);
       await loadTasks();
+      await loadSchedule();
     } catch (error) {
       console.error('Failed to optimize schedule:', error);
-      alert('Failed to optimize schedule. Please try again.');
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to optimize schedule. Please try again.';
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -96,15 +99,11 @@ export default function ScheduleView() {
             }`}>
               Date
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className={`w-full px-4 py-2 rounded-lg border ${
-                isDark
-                  ? 'bg-neutral-900 border-neutral-700 text-white'
-                  : 'bg-slate-50 border-slate-300 text-slate-900'
-              }`}
+              onChange={(value) => setSelectedDate(value.split('T')[0])}
+              placeholder="Select schedule date"
+              showTime={false}
             />
           </div>
           <div>

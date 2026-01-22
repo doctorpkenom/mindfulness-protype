@@ -67,10 +67,15 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        # Decode JWT token
+        # Decode JWT token (sub is stored as string in JWT)
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
+            raise credentials_exception
+        # Convert string user_id back to integer
+        try:
+            user_id: int = int(user_id_str)
+        except (ValueError, TypeError):
             raise credentials_exception
     except JWTError as e:
         # More detailed error for debugging

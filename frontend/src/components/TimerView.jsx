@@ -7,34 +7,43 @@ const API_BASE_URL = 'http://localhost:8000';
 
 export default function TimerView() {
   const { isDark } = useTheme();
-  const [activeTimer, setActiveTimer] = useState(null);
-  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [activeTimers, setActiveTimers] = useState([]);
+  const [timeRemaining, setTimeRemaining] = useState({});
   const [duration, setDuration] = useState(1500); // 25 minutes default
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
-    loadActiveTimer();
+    loadActiveTimers();
     loadTasks();
     const interval = setInterval(() => {
-      if (activeTimer && activeTimer.status === 'active') {
-        const elapsed = Math.floor((new Date() - new Date(activeTimer.started_at)) / 1000);
-        const remaining = Math.max(0, activeTimer.duration_seconds - elapsed);
-        setTimeRemaining(remaining);
-      }
+      const newTimeRemaining = {};
+      activeTimers.forEach(timer => {
+        if (timer.status === 'active') {
+          const elapsed = Math.floor((new Date() - new Date(timer.started_at)) / 1000);
+          const remaining = Math.max(0, timer.duration_seconds - elapsed);
+          newTimeRemaining[timer.id] = remaining;
+        }
+      });
+      setTimeRemaining(newTimeRemaining);
     }, 1000);
     return () => clearInterval(interval);
-  }, [activeTimer]);
+  }, [activeTimers]);
 
-  const loadActiveTimer = async () => {
+  const loadActiveTimers = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/timer/active`);
-      setActiveTimer(response.data);
-      const elapsed = Math.floor((new Date() - new Date(response.data.started_at)) / 1000);
-      setTimeRemaining(Math.max(0, response.data.duration_seconds - elapsed));
+      setActiveTimers(response.data || []);
+      const newTimeRemaining = {};
+      (response.data || []).forEach(timer => {
+        const elapsed = Math.floor((new Date() - new Date(timer.started_at)) / 1000);
+        newTimeRemaining[timer.id] = Math.max(0, timer.duration_seconds - elapsed);
+      });
+      setTimeRemaining(newTimeRemaining);
     } catch (error) {
       if (error.response?.status !== 404) {
-        console.error('Failed to load timer:', error);
+        console.error('Failed to load timers:', error);
       }
+      setActiveTimers([]);
     }
   };
 
@@ -53,20 +62,25 @@ export default function TimerView() {
         task_id: taskId,
         duration_seconds: duration
       });
-      await loadActiveTimer();
+      await loadActiveTimers();
     } catch (error) {
       console.error('Failed to start timer:', error);
       alert(error.response?.data?.detail || 'Failed to start timer');
     }
   };
 
-  const handleStop = async () => {
+  const handleStop = async (timerId) => {
     try {
-      await axios.post(`${API_BASE_URL}/api/timer/${activeTimer.id}/stop`);
-      await loadActiveTimer();
-      setTimeRemaining(0);
+      await axios.post(`${API_BASE_URL}/api/timer/${timerId}/stop`);
+      await loadActiveTimers();
+      setTimeRemaining(prev => {
+        const newState = { ...prev };
+        delete newState[timerId];
+        return newState;
+      });
     } catch (error) {
       console.error('Failed to stop timer:', error);
+      alert(error.response?.data?.detail || 'Failed to stop timer');
     }
   };
 
@@ -91,17 +105,11 @@ export default function TimerView() {
         </p>
       </div>
 
-      {/* Timer Display */}
-      <div className={`rounded-xl p-12 border text-center ${
-        isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-slate-200'
-      }`}>
-        <div className={`text-7xl font-mono font-bold mb-6 ${
-          isDark ? 'text-purple-400' : 'text-emerald-600'
+      {/* New Timer Form */}
+      {activeTimers.length === 0 && (
+        <div className={`rounded-xl p-6 border ${
+          isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-slate-200'
         }`}>
-          {formatTime(timeRemaining || duration)}
-        </div>
-
-        {!activeTimer ? (
           <div className="space-y-4">
             <div>
               <label className={`block text-sm font-medium mb-2 ${
@@ -133,34 +141,50 @@ export default function TimerView() {
               Start Timer
             </button>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {activeTimer.task_id && (
-              <p className={`text-sm ${
-                isDark ? 'text-neutral-400' : 'text-slate-600'
+        </div>
+      )}
+
+      {/* Active Timers Display */}
+      {activeTimers.length > 0 && (
+        <div className="space-y-4">
+          {activeTimers.map(timer => (
+            <div key={timer.id} className={`rounded-xl p-6 border ${
+              isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-slate-200'
+            }`}>
+              <div className={`text-5xl font-mono font-bold mb-4 text-center ${
+                isDark ? 'text-purple-400' : 'text-emerald-600'
               }`}>
-                Task: {tasks.find(t => t.id === activeTimer.task_id)?.title || 'Unknown'}
-              </p>
-            )}
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={handleStop}
-                className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
-                  isDark
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                    : 'bg-rose-500 hover:bg-rose-600 text-white'
-                }`}
-              >
-                <Square size={20} />
-                Stop
-              </button>
+                {formatTime(timeRemaining[timer.id] || timer.duration_seconds)}
+              </div>
+              
+              {timer.task_id && (
+                <p className={`text-sm text-center mb-4 ${
+                  isDark ? 'text-neutral-400' : 'text-slate-600'
+                }`}>
+                  Task: {tasks.find(t => t.id === timer.task_id)?.title || 'Unknown'}
+                </p>
+              )}
+              
+              <div className="flex gap-4 justify-center">
+                <button
+                  onClick={() => handleStop(timer.id)}
+                  className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+                    isDark
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                      : 'bg-rose-500 hover:bg-rose-600 text-white'
+                  }`}
+                >
+                  <Square size={20} />
+                  Stop
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Quick Start with Task */}
-      {tasks.length > 0 && !activeTimer && (
+      {tasks.length > 0 && (
         <div className={`rounded-xl p-6 border ${
           isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-slate-200'
         }`}>

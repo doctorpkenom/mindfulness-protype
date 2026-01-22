@@ -18,6 +18,7 @@ def optimize_schedule_with_ml(
     tasks: List[Task],
     work_start: str,
     work_end: str,
+    schedule_date: datetime,
     current_energy: float = 0.7,
     current_stress: float = 0.3,
     account_id: int = None
@@ -33,10 +34,15 @@ def optimize_schedule_with_ml(
     start_hour, start_min = map(int, work_start.split(":"))
     end_hour, end_min = map(int, work_end.split(":"))
     
-    # Create schedule items
+    # Create schedule items using the schedule date (not today)
     scheduled_items = []
-    current_time = datetime.now().replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
-    end_time = datetime.now().replace(hour=end_hour, minute=end_min, second=0, microsecond=0)
+    # Use the schedule date, not today's date
+    schedule_date_only = schedule_date.date() if isinstance(schedule_date, datetime) else schedule_date
+    if isinstance(schedule_date_only, datetime):
+        schedule_date_only = schedule_date_only.date()
+    
+    current_time = datetime.combine(schedule_date_only, datetime.min.time()).replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
+    end_time = datetime.combine(schedule_date_only, datetime.min.time()).replace(hour=end_hour, minute=end_min, second=0, microsecond=0)
     
     # Sort tasks by priority and difficulty (ML will refine this)
     sorted_tasks = sorted(tasks, key=lambda t: (-t.priority, t.difficulty))
@@ -102,87 +108,125 @@ def optimize_schedule(
     db: Session = Depends(get_db)
 ):
     """Optimize a schedule for the given date using ML."""
-    # Get tasks
-    tasks = db.query(Task).filter(
-        Task.id.in_(request.task_ids),
-        Task.account_id == current_user.id,
-        Task.status.in_(["pending", "scheduled"])
-    ).all()
+    try:
+        # Get tasks
+        tasks = db.query(Task).filter(
+            Task.id.in_(request.task_ids),
+            Task.account_id == current_user.id,
+            Task.status.in_(["pending", "scheduled"])
+        ).all()
+        
+        if not tasks:
+            raise HTTPException(status_code=400, detail="No valid tasks found")
+        
+        # Parse date - handle both ISO format and simple date string
+        try:
+            if "T" in request.date or "Z" in request.date:
+                # ISO format with time
+                schedule_date = datetime.fromisoformat(request.date.replace("Z", "+00:00"))
+                # Extract just the date part
+                schedule_date = schedule_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            else:
+                # Simple date string like "2026-01-20"
+                schedule_date = datetime.strptime(request.date, "%Y-%m-%d")
+        except (ValueError, AttributeError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {request.date}. Error: {str(e)}")
+        
+        # Get user's current state (or use defaults)
+        energy = request.current_energy or 0.7
+        stress = request.current_stress or 0.3
+        
+        # Optimize schedule
+        scheduled_items = optimize_schedule_with_ml(
+            tasks=tasks,
+            work_start=request.work_hours_start,
+            work_end=request.work_hours_end,
+            schedule_date=schedule_date,
+            current_energy=energy,
+            current_stress=stress,
+            account_id=current_user.id
+        )
+        
+        if not scheduled_items:
+            raise HTTPException(status_code=400, detail="Could not schedule tasks - not enough time")
     
-    if not tasks:
-        raise HTTPException(status_code=400, detail="No valid tasks found")
-    
-    # Parse date
-    schedule_date = datetime.fromisoformat(request.date.replace("Z", "+00:00"))
-    
-    # Get user's current state (or use defaults)
-    energy = request.current_energy or 0.7
-    stress = request.current_stress or 0.3
-    
-    # Optimize schedule
-    scheduled_items = optimize_schedule_with_ml(
-        tasks=tasks,
-        work_start=request.work_hours_start,
-        work_end=request.work_hours_end,
-        current_energy=energy,
-        current_stress=stress,
-        account_id=current_user.id
-    )
-    
-    if not scheduled_items:
-        raise HTTPException(status_code=400, detail="Could not schedule tasks - not enough time")
-    
-    # Create schedule
-    schedule = Schedule(
-        account_id=current_user.id,
-        date=schedule_date,
-        schedule_type="daily",
-        optimization_score=sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items),
-        optimization_context={
-            "energy": energy,
-            "stress": stress,
-            "work_hours": {"start": request.work_hours_start, "end": request.work_hours_end}
-        }
-    )
-    db.add(schedule)
-    db.commit()
-    db.refresh(schedule)
-    
-    # Create schedule items
-    for item_data in scheduled_items:
-        task = db.query(Task).get(item_data["task_id"])
-        if task:
-            schedule_item = ScheduleItem(
-                schedule_id=schedule.id,
-                task_id=item_data["task_id"],
-                start_time=item_data["start_time"],
-                end_time=item_data["end_time"],
-                placement_reason=item_data["placement_reason"],
-                confidence_score=item_data["confidence_score"],
-                status="scheduled"
+        # Create schedule
+        schedule = Schedule(
+            account_id=current_user.id,
+            date=schedule_date,
+            schedule_type="daily",
+            optimization_score=sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items),
+            optimization_context={
+                "energy": energy,
+                "stress": stress,
+                "work_hours": {"start": request.work_hours_start, "end": request.work_hours_end}
+            }
+        )
+        db.add(schedule)
+        db.commit()
+        db.refresh(schedule)
+        
+        # Create schedule items
+        for item_data in scheduled_items:
+            task = db.query(Task).filter(Task.id == item_data["task_id"]).first()
+            if task:
+                schedule_item = ScheduleItem(
+                    schedule_id=schedule.id,
+                    task_id=item_data["task_id"],
+                    start_time=item_data["start_time"],
+                    end_time=item_data["end_time"],
+                    placement_reason=item_data["placement_reason"],
+                    confidence_score=item_data["confidence_score"],
+                    status="scheduled"
+                )
+                db.add(schedule_item)
+                
+                # Update task status
+                task.status = "scheduled"
+                task.scheduled_start = item_data["start_time"]
+                task.scheduled_end = item_data["end_time"]
+        
+        db.commit()
+        
+        # Log optimization
+        log = SystemLog(
+            level="INFO",
+            component="schedule_optimizer",
+            message=f"Schedule optimized for {schedule_date.date()}",
+            context_data={"schedule_id": schedule.id, "tasks_scheduled": len(scheduled_items)}
+        )
+        db.add(log)
+        db.commit()
+        
+        # Return schedule with items
+        db.refresh(schedule)
+        return schedule
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"[ERROR /api/schedule/optimize] {str(e)}")
+        print(error_details)
+        
+        # Log error
+        try:
+            error_log = SystemLog(
+                level="ERROR",
+                component="schedule_optimizer",
+                message=f"Schedule optimization failed: {str(e)}",
+                context_data={"error": str(e), "traceback": error_details}
             )
-            db.add(schedule_item)
-            
-            # Update task status
-            task.status = "scheduled"
-            task.scheduled_start = item_data["start_time"]
-            task.scheduled_end = item_data["end_time"]
-    
-    db.commit()
-    
-    # Log optimization
-    log = SystemLog(
-        level="INFO",
-        component="schedule_optimizer",
-        message=f"Schedule optimized for {schedule_date.date()}",
-        context_data={"schedule_id": schedule.id, "tasks_scheduled": len(scheduled_items)}
-    )
-    db.add(log)
-    db.commit()
-    
-    # Return schedule with items
-    db.refresh(schedule)
-    return schedule
+            db.add(error_log)
+            db.commit()
+        except:
+            pass  # Don't fail if logging fails
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Machine learning model failed: {str(e)}"
+        )
 
 @router.get("/{date}", response_model=ScheduleResponse)
 def get_schedule(

@@ -192,6 +192,13 @@ class Task(Base):
     scheduled_end = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     
+    # Deadline and Recurrence
+    deadline = Column(DateTime, nullable=True, index=True)  # Task deadline (date and time)
+    recurrence_pattern = Column(String(50), nullable=True)  # "daily", "weekly", "monthly", "custom", "none"
+    recurrence_end_date = Column(DateTime, nullable=True)  # When to stop recurring
+    custom_recurrence_days = Column(Integer, nullable=True)  # For custom recurrence (e.g., every 3 days)
+    parent_task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)  # For recurring task chains
+    
     # ML learning data
     completion_accuracy = Column(Float, nullable=True)  # estimated vs actual time ratio
     user_satisfaction = Column(Integer, nullable=True)  # 1-5 rating after completion

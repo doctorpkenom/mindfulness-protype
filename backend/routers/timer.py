@@ -30,14 +30,8 @@ def start_timer(
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
     
-    # Check for active timer
-    active_timer = db.query(TimerSession).filter(
-        TimerSession.account_id == current_user.id,
-        TimerSession.status == "active"
-    ).first()
-    
-    if active_timer:
-        raise HTTPException(status_code=400, detail="You already have an active timer. Please stop it first.")
+    # Allow multiple timers - no need to check for active timer
+    # Users can have multiple timers running for different tasks
     
     # Create new timer session
     timer = TimerSession(
@@ -139,21 +133,18 @@ def pause_timer(
     
     return timer
 
-@router.get("/active", response_model=TimerResponse)
-def get_active_timer(
+@router.get("/active", response_model=List[TimerResponse])
+def get_active_timers(
     current_user: Account = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get the current active timer for the user."""
-    timer = db.query(TimerSession).filter(
+    """Get all active timers for the user."""
+    timers = db.query(TimerSession).filter(
         TimerSession.account_id == current_user.id,
         TimerSession.status == "active"
-    ).first()
+    ).order_by(TimerSession.started_at.desc()).all()
     
-    if not timer:
-        raise HTTPException(status_code=404, detail="No active timer")
-    
-    return timer
+    return timers
 
 @router.get("/", response_model=List[TimerResponse])
 def get_timer_history(

@@ -79,6 +79,10 @@ class TaskCreate(BaseModel):
     focus_required: float = 0.5  # 0.0-1.0
     category: Optional[str] = None
     tags: Optional[List[str]] = None
+    deadline: Optional[str] = None  # ISO datetime string
+    recurrence_pattern: Optional[str] = None  # "daily", "weekly", "monthly", "custom", "none"
+    recurrence_end_date: Optional[str] = None  # ISO datetime string
+    custom_recurrence_days: Optional[int] = None  # For custom recurrence (e.g., every 3 days)
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -92,12 +96,20 @@ class TaskUpdate(BaseModel):
     tags: Optional[List[str]] = None
     status: Optional[str] = None
     user_satisfaction: Optional[int] = None
+    deadline: Optional[str] = None  # ISO datetime string
+    recurrence_pattern: Optional[str] = None  # "daily", "weekly", "monthly", "custom", "none"
+    recurrence_end_date: Optional[str] = None  # ISO datetime string
+    custom_recurrence_days: Optional[int] = None  # For custom recurrence (e.g., every 3 days)
 
 class TaskResponse(BaseModel):
     id: int
     title: str
     description: Optional[str]
     estimated_minutes: int
+    deadline: Optional[datetime] = None
+    recurrence_pattern: Optional[str] = None
+    recurrence_end_date: Optional[datetime] = None
+    custom_recurrence_days: Optional[int] = None
     actual_minutes: Optional[int]
     priority: int
     difficulty: int
