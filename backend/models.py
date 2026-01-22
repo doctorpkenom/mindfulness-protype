@@ -179,3 +179,6 @@ class TimerResponse(BaseModel):
     
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() + 'Z' if v and v.tzinfo is None else (v.isoformat() if v else None)
+        }

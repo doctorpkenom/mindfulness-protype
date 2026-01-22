@@ -39,6 +39,7 @@ def start_timer(
     
     # Create new timer session
     started_at = datetime.utcnow()
+    print(f"[TIMER] Creating timer with duration_seconds={request.duration_seconds}, started_at={started_at.isoformat()}")
     timer = TimerSession(
         account_id=current_user.id,
         task_id=request.task_id,
@@ -66,7 +67,8 @@ def start_timer(
     db.add(log)
     db.commit()
     
-    print(f"[TIMER] Created timer {timer.id}: duration={timer.duration_seconds}s, started_at={timer.started_at}")
+    print(f"[TIMER] Created timer {timer.id}: duration={timer.duration_seconds}s, started_at={timer.started_at.isoformat()}")
+    print(f"[TIMER] Timer started_at type: {type(timer.started_at)}, value: {timer.started_at}")
     
     return timer
 

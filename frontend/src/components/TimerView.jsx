@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Square, Clock, Plus } from 'lucide-react';
-import { useTheme } from '../contexts/ThemeContext';
 import axios from 'axios';
+import { Clock, Pause, Play, Plus, Square } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -14,7 +14,11 @@ export default function TimerView() {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [tasks, setTasks] = useState([]);
   const [showNewTimerForm, setShowNewTimerForm] = useState(false);
+  const [focusedInput, setFocusedInput] = useState(null); // Track which input is focused
   const intervalRef = useRef(null);
+  const hoursInputRef = useRef(null);
+  const minutesInputRef = useRef(null);
+  const secondsInputRef = useRef(null);
 
   const handleTimerComplete = async (timerId) => {
     // Automatically stop timer when it reaches zero
@@ -55,12 +59,25 @@ export default function TimerView() {
           if (timer.status === 'active') {
             const now = new Date();
             // Parse started_at - handle both ISO string and Date object
-            const startedAt = timer.started_at instanceof Date 
-              ? timer.started_at 
-              : new Date(timer.started_at);
+            let startedAt;
+            if (timer.started_at instanceof Date) {
+              startedAt = timer.started_at;
+            } else if (typeof timer.started_at === 'string') {
+              // Parse ISO string - if no timezone info, assume UTC
+              let dateStr = timer.started_at;
+              // If the string doesn't end with Z or timezone, it might be UTC from backend
+              if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+                // Assume UTC if no timezone specified (backend uses UTC)
+                dateStr = dateStr + 'Z';
+              }
+              startedAt = new Date(dateStr);
+            } else {
+              startedAt = new Date(timer.started_at);
+            }
             
             if (!isNaN(startedAt.getTime()) && timer.duration_seconds) {
-              const elapsed = Math.floor((now - startedAt) / 1000);
+              // Calculate elapsed time in seconds using getTime() for accurate millisecond calculation
+              const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
               const remaining = Math.max(0, timer.duration_seconds - elapsed);
               
               // Update time remaining state
@@ -105,9 +122,21 @@ export default function TimerView() {
       timers.forEach(timer => {
         if (timer.status === 'active') {
           // Parse started_at - handle both ISO string and Date object
-          const startedAt = timer.started_at instanceof Date 
-            ? timer.started_at 
-            : new Date(timer.started_at);
+          let startedAt;
+          if (timer.started_at instanceof Date) {
+            startedAt = timer.started_at;
+          } else if (typeof timer.started_at === 'string') {
+            // Parse ISO string - if no timezone info, assume UTC
+            let dateStr = timer.started_at;
+            // If the string doesn't end with Z or timezone, it might be UTC from backend
+            if (!dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+              // Assume UTC if no timezone specified (backend uses UTC)
+              dateStr = dateStr + 'Z';
+            }
+            startedAt = new Date(dateStr);
+          } else {
+            startedAt = new Date(timer.started_at);
+          }
           
           // Ensure we have valid dates
           if (isNaN(startedAt.getTime())) {
@@ -115,10 +144,12 @@ export default function TimerView() {
             newTimeRemaining[timer.id] = timer.duration_seconds;
           } else {
             const now = new Date();
-            const elapsed = Math.floor((now - startedAt) / 1000);
+            // Calculate elapsed time in seconds
+            const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
             const remaining = Math.max(0, timer.duration_seconds - elapsed);
             newTimeRemaining[timer.id] = remaining;
-            console.log(`Timer ${timer.id}: duration=${timer.duration_seconds}s, elapsed=${elapsed}s, remaining=${remaining}s`);
+            console.log(`Timer ${timer.id}: duration=${timer.duration_seconds}s, started_at="${timer.started_at}", startedAt_parsed=${startedAt.toISOString()}, now=${now.toISOString()}, elapsed=${elapsed}s, remaining=${remaining}s`);
+            console.log(`  Time difference: ${now.getTime()} - ${startedAt.getTime()} = ${now.getTime() - startedAt.getTime()}ms = ${elapsed}s`);
           }
         } else if (timer.status === 'paused') {
           // For paused timers, use stored remaining time from actual_seconds
@@ -150,17 +181,50 @@ export default function TimerView() {
       if (customDuration !== null) {
         // If custom duration provided (from task), use it in minutes
         durationSeconds = customDuration * 60;
+        console.log(`Starting timer from task: ${customDuration} minutes (${durationSeconds} seconds)`);
       } else {
-        // Calculate from hours, minutes, seconds
-        durationSeconds = (timerHours * 3600) + (timerMinutes * 60) + timerSeconds;
+        // Read values directly from input refs if they exist, otherwise use state
+        // This ensures we get the current value even if input is focused
+        let hours = timerHours || 0;
+        let minutes = timerMinutes || 0;
+        let seconds = timerSeconds || 0;
+        
+        // If inputs exist, read their current values
+        if (hoursInputRef.current) {
+          const hoursVal = parseInt(hoursInputRef.current.value) || 0;
+          if (!isNaN(hoursVal)) {
+            hours = Math.max(0, Math.min(23, hoursVal));
+            setTimerHours(hours);
+          }
+        }
+        if (minutesInputRef.current) {
+          const minutesVal = parseInt(minutesInputRef.current.value) || 0;
+          if (!isNaN(minutesVal)) {
+            minutes = Math.max(0, Math.min(59, minutesVal));
+            setTimerMinutes(minutes);
+          }
+        }
+        if (secondsInputRef.current) {
+          const secondsVal = parseInt(secondsInputRef.current.value) || 0;
+          if (!isNaN(secondsVal)) {
+            seconds = Math.max(0, Math.min(59, secondsVal));
+            setTimerSeconds(seconds);
+          }
+        }
+        
+        durationSeconds = (hours * 3600) + (minutes * 60) + seconds;
+        
+        console.log(`Starting timer from inputs: ${hours}h ${minutes}m ${seconds}s (${durationSeconds} seconds)`);
+        console.log(`State values: timerHours=${timerHours}, timerMinutes=${timerMinutes}, timerSeconds=${timerSeconds}`);
+        console.log(`Input values: hours=${hours}, minutes=${minutes}, seconds=${seconds}`);
       }
-      
-      console.log(`Starting timer: ${timerHours}h ${timerMinutes}m ${timerSeconds}s (${durationSeconds} seconds)`);
       
       if (!durationSeconds || durationSeconds <= 0) {
         alert('Please set a valid duration (at least 1 second)');
         return;
       }
+      
+      console.log(`Sending to backend: duration_seconds=${durationSeconds}`);
       
       const response = await axios.post(`${API_BASE_URL}/api/timer/start`, {
         task_id: taskId,
@@ -168,12 +232,19 @@ export default function TimerView() {
       });
       
       console.log('Timer created:', response.data);
+      console.log('Backend returned duration_seconds:', response.data.duration_seconds);
       console.log('Timer details:', {
         id: response.data.id,
         duration_seconds: response.data.duration_seconds,
         started_at: response.data.started_at,
         status: response.data.status
       });
+      
+      // Verify the backend received the correct duration
+      if (response.data.duration_seconds !== durationSeconds) {
+        console.error(`Duration mismatch! Sent: ${durationSeconds}, Received: ${response.data.duration_seconds}`);
+        alert(`Warning: Timer duration mismatch. Expected ${durationSeconds}s but got ${response.data.duration_seconds}s`);
+      }
       
       // Small delay to ensure backend has saved the timer
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -184,13 +255,20 @@ export default function TimerView() {
       setTimerHours(0);
       setTimerMinutes(25);
       setTimerSeconds(0);
+      setFocusedInput(null);
       
       // Force immediate update of time remaining for the new timer
       if (response.data) {
         const timer = response.data;
-        const startedAt = new Date(timer.started_at);
+        // Parse started_at - if no timezone info, assume UTC
+        let dateStr = timer.started_at;
+        if (typeof dateStr === 'string' && !dateStr.endsWith('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+          dateStr = dateStr + 'Z';
+        }
+        const startedAt = new Date(dateStr);
         const now = new Date();
-        const elapsed = Math.floor((now - startedAt) / 1000);
+        // Use getTime() for accurate millisecond calculation
+        const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
         const remaining = Math.max(0, timer.duration_seconds - elapsed);
         
         setTimeRemaining(prev => ({
@@ -199,9 +277,12 @@ export default function TimerView() {
         }));
         
         console.log(`Initial time remaining for timer ${timer.id}: ${remaining}s (${timer.duration_seconds}s - ${elapsed}s elapsed)`);
+        console.log(`  started_at: ${timer.started_at}, parsed: ${startedAt.toISOString()}, now: ${now.toISOString()}`);
+        console.log(`  Time difference: ${now.getTime()} - ${startedAt.getTime()} = ${now.getTime() - startedAt.getTime()}ms = ${elapsed}s`);
       }
     } catch (error) {
       console.error('Failed to start timer:', error);
+      console.error('Error details:', error.response?.data);
       alert(error.response?.data?.detail || 'Failed to start timer');
     }
   };
@@ -316,13 +397,30 @@ export default function TimerView() {
                       ↑
                     </button>
                     <input
-                      type="number"
-                      min="0"
-                      max="23"
-                      value={timerHours}
+                      ref={hoursInputRef}
+                      type="text"
+                      value={focusedInput === 'hours' ? timerHours.toString() : timerHours.toString().padStart(2, '0')}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setTimerHours(Math.max(0, Math.min(23, val)));
+                        const inputVal = e.target.value;
+                        // Allow empty input while typing
+                        if (inputVal === '') {
+                          setTimerHours(0);
+                          return;
+                        }
+                        const val = parseInt(inputVal);
+                        if (!isNaN(val)) {
+                          setTimerHours(Math.max(0, Math.min(23, val)));
+                        }
+                      }}
+                      onFocus={() => setFocusedInput('hours')}
+                      onBlur={(e) => {
+                        setFocusedInput(null);
+                        // Ensure it's formatted and valid on blur
+                        const inputVal = e.target.value;
+                        const val = inputVal === '' ? 0 : (parseInt(inputVal) || 0);
+                        const clampedVal = Math.max(0, Math.min(23, val));
+                        setTimerHours(clampedVal);
+                        console.log(`Hours input blurred: "${inputVal}" -> ${clampedVal}`);
                       }}
                       className={`w-16 px-3 py-2 rounded-lg border text-center text-2xl font-mono font-bold ${
                         isDark
@@ -372,13 +470,30 @@ export default function TimerView() {
                       ↑
                     </button>
                     <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={timerMinutes}
+                      ref={minutesInputRef}
+                      type="text"
+                      value={focusedInput === 'minutes' ? timerMinutes.toString() : timerMinutes.toString().padStart(2, '0')}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setTimerMinutes(Math.max(0, Math.min(59, val)));
+                        const inputVal = e.target.value;
+                        // Allow empty input while typing
+                        if (inputVal === '') {
+                          setTimerMinutes(0);
+                          return;
+                        }
+                        const val = parseInt(inputVal);
+                        if (!isNaN(val)) {
+                          setTimerMinutes(Math.max(0, Math.min(59, val)));
+                        }
+                      }}
+                      onFocus={() => setFocusedInput('minutes')}
+                      onBlur={(e) => {
+                        setFocusedInput(null);
+                        // Ensure it's formatted and valid on blur
+                        const inputVal = e.target.value;
+                        const val = inputVal === '' ? 0 : (parseInt(inputVal) || 0);
+                        const clampedVal = Math.max(0, Math.min(59, val));
+                        setTimerMinutes(clampedVal);
+                        console.log(`Minutes input blurred: "${inputVal}" -> ${clampedVal}`);
                       }}
                       className={`w-16 px-3 py-2 rounded-lg border text-center text-2xl font-mono font-bold ${
                         isDark
@@ -428,13 +543,30 @@ export default function TimerView() {
                       ↑
                     </button>
                     <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      value={timerSeconds}
+                      ref={secondsInputRef}
+                      type="text"
+                      value={focusedInput === 'seconds' ? timerSeconds.toString() : timerSeconds.toString().padStart(2, '0')}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setTimerSeconds(Math.max(0, Math.min(59, val)));
+                        const inputVal = e.target.value;
+                        // Allow empty input while typing
+                        if (inputVal === '') {
+                          setTimerSeconds(0);
+                          return;
+                        }
+                        const val = parseInt(inputVal);
+                        if (!isNaN(val)) {
+                          setTimerSeconds(Math.max(0, Math.min(59, val)));
+                        }
+                      }}
+                      onFocus={() => setFocusedInput('seconds')}
+                      onBlur={(e) => {
+                        setFocusedInput(null);
+                        // Ensure it's formatted and valid on blur
+                        const inputVal = e.target.value;
+                        const val = inputVal === '' ? 0 : (parseInt(inputVal) || 0);
+                        const clampedVal = Math.max(0, Math.min(59, val));
+                        setTimerSeconds(clampedVal);
+                        console.log(`Seconds input blurred: "${inputVal}" -> ${clampedVal}`);
                       }}
                       className={`w-16 px-3 py-2 rounded-lg border text-center text-2xl font-mono font-bold ${
                         isDark
@@ -471,7 +603,26 @@ export default function TimerView() {
             
             <div className="flex gap-3 justify-center">
               <button
-                onClick={() => handleStart(null)}
+                onClick={(e) => {
+                  // Blur any focused input to ensure values are saved
+                  if (focusedInput) {
+                    // Trigger blur on the focused input
+                    if (focusedInput === 'hours' && hoursInputRef.current) {
+                      hoursInputRef.current.blur();
+                    } else if (focusedInput === 'minutes' && minutesInputRef.current) {
+                      minutesInputRef.current.blur();
+                    } else if (focusedInput === 'seconds' && secondsInputRef.current) {
+                      secondsInputRef.current.blur();
+                    }
+                    setFocusedInput(null);
+                    // Small delay to ensure state updates from blur handler
+                    setTimeout(() => {
+                      handleStart(null);
+                    }, 100);
+                  } else {
+                    handleStart(null);
+                  }
+                }}
                 disabled={(timerHours === 0 && timerMinutes === 0 && timerSeconds === 0)}
                 className={`px-8 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
                   (timerHours === 0 && timerMinutes === 0 && timerSeconds === 0)
