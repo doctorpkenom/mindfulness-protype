@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Calendar, Clock, BarChart3, Settings, Sun, Moon, LogOut, Shield } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
 import { useAuth } from './contexts/AuthContext';
@@ -14,6 +14,13 @@ function App() {
   const [activeTab, setActiveTab] = useState('tasks');
   const { isDark, toggleTheme } = useTheme();
   const { user, logout, loading } = useAuth();
+
+  // Reset to tasks page when user logs in
+  useEffect(() => {
+    if (user && !loading) {
+      setActiveTab('tasks');
+    }
+  }, [user, loading]);
 
   // Show login page if not authenticated
   if (loading) {
