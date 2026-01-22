@@ -136,3 +136,6 @@ dmypy.json
 config.ini
 secrets.json
 documents/
+
+# Internal testing documentation
+UI_TESTING_GUIDE.md
