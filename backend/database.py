@@ -33,11 +33,23 @@ def get_db():
 
 def init_db():
     """Initialize database - create all tables."""
+    # Import all models to ensure they're registered with Base.metadata
+    from backend.db_models import (
+        User, Interaction, Simulation, ModelPerformance, 
+        ResearchModule, SystemLog, Account, Task, Schedule, 
+        ScheduleItem, TimerSession, UserMLWeights
+    )
     Base.metadata.create_all(bind=engine)
-    print("✅ Database initialized successfully")
+    print("[OK] Database initialized successfully")
 
 def reset_db():
     """Reset database - drop all tables and recreate."""
+    # Import all models to ensure they're registered with Base.metadata
+    from backend.db_models import (
+        User, Interaction, Simulation, ModelPerformance, 
+        ResearchModule, SystemLog, Account, Task, Schedule, 
+        ScheduleItem, TimerSession, UserMLWeights
+    )
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    print("✅ Database reset successfully")
+    print("[OK] Database reset successfully")

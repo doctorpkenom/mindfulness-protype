@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 # Add project root to sys.path to allow importing existing modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.routers import users, research, simulation, analytics, debug
+from backend.routers import users, research, simulation, analytics, debug, auth, tasks, schedule, timer
 from backend.database import init_db
 
 @asynccontextmanager
@@ -22,9 +22,9 @@ async def lifespan(app: FastAPI):
     print("👋 Shutting down...")
 
 app = FastAPI(
-    title="Mindfulness Prototype API",
-    version="2.0.0",
-    description="AI-powered mindfulness and focus assistant with ML ensemble",
+    title="Productivity Assistant API",
+    version="3.0.0",
+    description="AI-powered productivity assistant with ML-optimized task scheduling",
     lifespan=lifespan
 )
 
@@ -44,7 +44,16 @@ app.add_middleware(
 )
 
 # Include Routers
-app.include_router(users.router, prefix="/api/users", tags=["Users"])
+# Authentication (public)
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+
+# User tasks and productivity (authenticated)
+app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
+app.include_router(schedule.router, prefix="/api/schedule", tags=["Schedule"])
+app.include_router(timer.router, prefix="/api/timer", tags=["Timer"])
+
+# Legacy/Admin routers (for simulations and debugging)
+app.include_router(users.router, prefix="/api/users", tags=["Users (Legacy)"])
 app.include_router(research.router, prefix="/api/research", tags=["Research"])
 app.include_router(simulation.router, prefix="/api/simulation", tags=["Simulation"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
@@ -54,8 +63,8 @@ app.include_router(debug.router, prefix="/api/debug", tags=["Debug"])
 def read_root():
     return {
         "status": "ok",
-        "message": "Mindfulness Prototype API v2.0.0",
-        "features": ["ML Ensemble", "Research Engine", "Dual Theme UI", "Database Persistence"]
+        "message": "Productivity Assistant API v3.0.0",
+        "features": ["ML-Optimized Scheduling", "Task Management", "Timer Tracking", "User Authentication", "Personalized Learning"]
     }
 
 @app.get("/health")

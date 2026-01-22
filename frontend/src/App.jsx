@@ -1,28 +1,49 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Users, FlaskConical, PlayCircle, Activity, Sun, Moon, Settings } from 'lucide-react';
+import { LayoutDashboard, Calendar, Clock, BarChart3, Settings, Sun, Moon, LogOut, Shield } from 'lucide-react';
 import { useTheme } from './contexts/ThemeContext';
-import UserTab from './components/UserTab';
-import PilotTab from './components/PilotTab';
-import SimulationTab from './components/SimulationTab';
-import DashboardTab from './components/DashboardTab';
-import DebugTab from './components/DebugTab';
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
+import TaskDashboard from './components/TaskDashboard';
+import ScheduleView from './components/ScheduleView';
+import TimerView from './components/TimerView';
+import AnalyticsView from './components/AnalyticsView';
+import AdminView from './components/AdminView';
+import LoadingSpinner from './components/LoadingSpinner';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('tasks');
   const { isDark, toggleTheme } = useTheme();
+  const { user, logout, loading } = useAuth();
+
+  // Show login page if not authenticated
+  if (loading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${
+        isDark ? 'bg-black' : 'bg-slate-50'
+      }`}>
+        <LoadingSpinner message="Loading..." />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'dashboard': return <DashboardTab />;
-      case 'pilot': return <PilotTab />;
-      case 'users': return <UserTab />;
-      case 'simulation': return <SimulationTab />;
-      case 'debug': return <DebugTab />;
-      default: return <DashboardTab />;
+      case 'tasks': return <TaskDashboard />;
+      case 'schedule': return <ScheduleView />;
+      case 'timer': return <TimerView />;
+      case 'analytics': return <AnalyticsView />;
+      case 'admin': return user.is_admin ? <AdminView /> : <div>Access Denied</div>;
+      default: return <TaskDashboard />;
     }
   };
 
-  const NavItem = ({ id, label, icon: Icon }) => {
+  const NavItem = ({ id, label, icon: Icon, adminOnly = false }) => {
+    if (adminOnly && !user.is_admin) return null;
+    
     const isActive = activeTab === id;
     return (
       <button
@@ -59,50 +80,75 @@ function App() {
               ? 'bg-gradient-to-br from-purple-600 to-pink-600'
               : 'bg-gradient-to-br from-emerald-500 to-teal-500'
           }`}>
-            <Activity className="text-white" size={20} />
+            <LayoutDashboard className="text-white" size={20} />
           </div>
-          <h1 className={`text-xl font-bold ${
-            isDark ? 'gradient-text-dark' : 'gradient-text-light'
-          }`}>
-            Mindfulness
-          </h1>
+          <div className="flex-1">
+            <h1 className={`text-xl font-bold ${
+              isDark ? 'gradient-text-dark' : 'gradient-text-light'
+            }`}>
+              Productivity
+            </h1>
+            <p className={`text-xs ${
+              isDark ? 'text-neutral-500' : 'text-slate-400'
+            }`}>
+              {user.username}
+            </p>
+          </div>
         </div>
 
         <nav className="space-y-2 flex-1">
-          <NavItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
-          <NavItem id="pilot" label="Live Pilot" icon={PlayCircle} />
-          <NavItem id="users" label="User Manager" icon={Users} />
-          <NavItem id="simulation" label="Simulation Lab" icon={FlaskConical} />
-          <NavItem id="debug" label="Debug & Settings" icon={Settings} />
+          <NavItem id="tasks" label="My Tasks" icon={LayoutDashboard} />
+          <NavItem id="schedule" label="Schedule" icon={Calendar} />
+          <NavItem id="timer" label="Timer" icon={Clock} />
+          <NavItem id="analytics" label="Analytics" icon={BarChart3} />
+          <NavItem id="admin" label="Admin" icon={Shield} adminOnly={true} />
         </nav>
 
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          className={`flex items-center justify-center space-x-2 w-full p-3 rounded-lg mb-4 transition-all duration-300 ${
-            isDark
-              ? 'bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800'
-              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-          }`}
-          aria-label="Toggle theme"
-        >
-          {isDark ? (
-            <>
-              <Sun size={18} className="text-yellow-400" />
-              <span className="text-sm font-medium">Light Mode</span>
-            </>
-          ) : (
-            <>
-              <Moon size={18} className="text-purple-600" />
-              <span className="text-sm font-medium">Dark Mode</span>
-            </>
-          )}
-        </button>
+        {/* User Info & Actions */}
+        <div className={`border-t pt-4 space-y-2 ${
+          isDark ? 'border-neutral-800' : 'border-slate-200'
+        }`}>
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className={`flex items-center justify-center space-x-2 w-full p-3 rounded-lg mb-2 transition-all duration-300 ${
+              isDark
+                ? 'bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+            }`}
+            aria-label="Toggle theme"
+          >
+            {isDark ? (
+              <>
+                <Sun size={18} className="text-yellow-400" />
+                <span className="text-sm font-medium">Light Mode</span>
+              </>
+            ) : (
+              <>
+                <Moon size={18} className="text-purple-600" />
+                <span className="text-sm font-medium">Dark Mode</span>
+              </>
+            )}
+          </button>
 
-        <div className={`text-xs px-2 text-center ${
+          {/* Logout */}
+          <button
+            onClick={logout}
+            className={`flex items-center justify-center space-x-2 w-full p-3 rounded-lg transition-all duration-300 ${
+              isDark
+                ? 'bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+            }`}
+          >
+            <LogOut size={18} />
+            <span className="text-sm font-medium">Logout</span>
+          </button>
+        </div>
+
+        <div className={`text-xs px-2 text-center mt-4 ${
           isDark ? 'text-neutral-600' : 'text-slate-400'
         }`}>
-          v2.0.0 • Theme Ready
+          v3.0.0 • ML-Powered
         </div>
       </aside>
 
@@ -110,14 +156,13 @@ function App() {
       <main className={`flex-1 overflow-auto relative theme-transition ${
         isDark ? 'bg-black' : 'bg-slate-50'
       }`}>
-        {/* Optional subtle gradient overlay */}
         <div className={`absolute inset-0 pointer-events-none ${
           isDark 
             ? 'bg-gradient-to-br from-purple-950/10 via-transparent to-pink-950/10' 
             : 'bg-gradient-to-br from-emerald-50/30 via-transparent to-violet-50/30'
         }`} />
         
-        <div className="max-w-7xl mx-auto min-h-full relative z-10">
+        <div className="max-w-7xl mx-auto min-h-full relative z-10 p-6">
           {renderTab()}
         </div>
       </main>
