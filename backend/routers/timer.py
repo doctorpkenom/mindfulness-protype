@@ -20,6 +20,10 @@ def start_timer(
     db: Session = Depends(get_db)
 ):
     """Start a timer session."""
+    # Validate duration
+    if not request.duration_seconds or request.duration_seconds <= 0:
+        raise HTTPException(status_code=400, detail="Duration must be greater than 0")
+    
     # Check if task exists (if provided)
     task = None
     if request.task_id:
@@ -34,12 +38,13 @@ def start_timer(
     # Users can have multiple timers running for different tasks
     
     # Create new timer session
+    started_at = datetime.utcnow()
     timer = TimerSession(
         account_id=current_user.id,
         task_id=request.task_id,
         duration_seconds=request.duration_seconds,
         status="active",
-        started_at=datetime.utcnow()
+        started_at=started_at
     )
     
     db.add(timer)
@@ -56,10 +61,12 @@ def start_timer(
         level="INFO",
         component="timer",
         message=f"Timer started: {request.duration_seconds}s",
-        context_data={"timer_id": timer.id, "task_id": request.task_id}
+        context_data={"timer_id": timer.id, "task_id": request.task_id, "duration_seconds": request.duration_seconds}
     )
     db.add(log)
     db.commit()
+    
+    print(f"[TIMER] Created timer {timer.id}: duration={timer.duration_seconds}s, started_at={timer.started_at}")
     
     return timer
 
@@ -94,7 +101,7 @@ def stop_timer(
     
     # Update task if associated
     if timer.task_id:
-        task = db.query(Task).get(timer.task_id)
+        task = db.query(Task).filter(Task.id == timer.task_id).first()
         if task:
             # Update actual time
             task.actual_minutes = int(actual_duration / 60)
@@ -125,8 +132,47 @@ def pause_timer(
     if timer.status != "active":
         raise HTTPException(status_code=400, detail="Timer is not active")
     
+    # Calculate elapsed time and store remaining time
+    elapsed = (datetime.utcnow() - timer.started_at).total_seconds()
+    remaining = max(0, timer.duration_seconds - int(elapsed))
+    
     timer.status = "paused"
     timer.paused_at = datetime.utcnow()
+    # Store remaining time in actual_seconds temporarily
+    timer.actual_seconds = remaining
+    
+    db.commit()
+    db.refresh(timer)
+    
+    return timer
+
+@router.post("/{timer_id}/resume", response_model=TimerResponse)
+def resume_timer(
+    timer_id: int,
+    current_user: Account = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Resume a paused timer."""
+    timer = db.query(TimerSession).filter(
+        TimerSession.id == timer_id,
+        TimerSession.account_id == current_user.id
+    ).first()
+    
+    if not timer:
+        raise HTTPException(status_code=404, detail="Timer not found")
+    
+    if timer.status != "paused":
+        raise HTTPException(status_code=400, detail="Timer is not paused")
+    
+    # Get remaining time from actual_seconds (stored during pause)
+    remaining = timer.actual_seconds or timer.duration_seconds
+    
+    # Update timer to resume with remaining time
+    timer.status = "active"
+    timer.duration_seconds = remaining  # Update duration to remaining time
+    timer.started_at = datetime.utcnow()  # Reset start time
+    timer.paused_at = None
+    timer.actual_seconds = None  # Clear temporary storage
     
     db.commit()
     db.refresh(timer)
@@ -138,10 +184,10 @@ def get_active_timers(
     current_user: Account = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all active timers for the user."""
+    """Get all active and paused timers for the user."""
     timers = db.query(TimerSession).filter(
         TimerSession.account_id == current_user.id,
-        TimerSession.status == "active"
+        TimerSession.status.in_(["active", "paused"])
     ).order_by(TimerSession.started_at.desc()).all()
     
     return timers
