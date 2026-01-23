@@ -7,9 +7,11 @@ export default function NotificationCenter() {
   const { isDark } = useTheme();
   const {
     notifications,
+    activeToasts,
     showPanel,
     setShowPanel,
     dismissNotification,
+    dismissToast,
     markAsRead,
     markAllAsRead,
     clearAll,
@@ -65,8 +67,142 @@ export default function NotificationCenter() {
     return time.toLocaleDateString();
   };
 
+  // Debug log
+  useEffect(() => {
+    console.log('[NOTIFICATION CENTER] Active toasts:', activeToasts.length, activeToasts);
+    activeToasts.forEach((toast, idx) => {
+      console.log(`[NOTIFICATION CENTER] Toast ${idx}:`, {
+        id: toast.id,
+        title: toast.title,
+        message: toast.message,
+        type: toast.type,
+        countdown: toast.countdown
+      });
+    });
+  }, [activeToasts]);
+
   return (
     <div className="relative">
+      {/* Toast Notifications - Appear briefly above the bell */}
+      <div 
+        className="absolute right-0 bottom-full mb-2 space-y-2"
+        style={{
+          zIndex: 9999,
+          pointerEvents: 'auto'
+        }}
+      >
+        {activeToasts && activeToasts.length > 0 && activeToasts.map((toast) => {
+          console.log('[NOTIFICATION CENTER] Rendering toast:', toast);
+          return (
+            <div
+              key={toast.id}
+              className={`w-72 rounded-lg border shadow-2xl ${
+                isDark
+                  ? 'bg-neutral-950 border-neutral-800'
+                  : 'bg-white border-slate-200'
+              }`}
+              style={{
+                animation: 'slideInRight 0.3s ease-out',
+                display: 'flex',
+                flexDirection: 'column',
+                position: 'relative',
+                zIndex: 10000,
+                opacity: 1,
+                visibility: 'visible'
+              }}
+            >
+              {/* Content Section */}
+              <div 
+                className="p-3 flex-shrink-0" 
+                style={{ 
+                  minHeight: '60px',
+                  position: 'relative',
+                  zIndex: 1,
+                  display: 'block',
+                  opacity: 1,
+                  visibility: 'visible'
+                }}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {getIcon(toast.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 
+                      className={`font-medium text-sm mb-1 ${
+                        isDark ? 'text-white' : 'text-slate-900'
+                      }`} 
+                      style={{ 
+                        display: 'block',
+                        opacity: 1,
+                        visibility: 'visible',
+                        color: isDark ? '#ffffff' : '#0f172a'
+                      }}
+                    >
+                      {toast.title || 'Notification'}
+                    </h4>
+                    {toast.message && (
+                      <p 
+                        className={`text-xs leading-relaxed mt-0.5 break-words ${
+                          isDark ? 'text-neutral-200' : 'text-slate-700'
+                        }`} 
+                        style={{ 
+                          display: 'block',
+                          opacity: 1,
+                          visibility: 'visible',
+                          color: isDark ? '#e5e7eb' : '#334155',
+                          marginTop: '2px'
+                        }}
+                      >
+                        {toast.message}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      dismissToast(toast.id);
+                    }}
+                    className={`flex-shrink-0 p-1 rounded transition-colors ${
+                      isDark
+                        ? 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                    }`}
+                    aria-label="Dismiss toast"
+                    style={{ zIndex: 2 }}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+              {/* Countdown Bar - Fills from left to right */}
+              <div className={`h-1 relative overflow-hidden rounded-b-lg flex-shrink-0 ${
+                isDark ? 'bg-neutral-800' : 'bg-slate-200'
+              }`}>
+                <div
+                  className={`h-full absolute left-0 top-0 ${
+                    toast.type === 'timer'
+                      ? isDark
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600'
+                        : 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                      : toast.type === 'success'
+                      ? 'bg-emerald-500'
+                      : toast.type === 'error'
+                      ? 'bg-red-500'
+                      : toast.type === 'warning'
+                      ? 'bg-yellow-500'
+                      : 'bg-blue-500'
+                  }`}
+                  style={{ 
+                    width: `${toast.countdown || 0}%`,
+                    transition: 'width 50ms linear'
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {/* Bell Icon Button */}
       <button
         onClick={() => setShowPanel(!showPanel)}

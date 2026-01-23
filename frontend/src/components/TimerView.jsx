@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Check, Clock, Edit2, Pause, Play, Plus, Square, X } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNotifications } from '../contexts/NotificationContext';
 
@@ -8,10 +8,11 @@ const API_BASE_URL = 'http://localhost:8000';
 
 export default function TimerView() {
   const { isDark } = useTheme();
+  const { addNotification } = useNotifications();
   const [activeTimers, setActiveTimers] = useState([]);
   const [timeRemaining, setTimeRemaining] = useState({});
   const [timerHours, setTimerHours] = useState(0);
-  const [timerMinutes, setTimerMinutes] = useState(25);
+  const [timerMinutes, setTimerMinutes] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerName, setTimerName] = useState('');
   const [tasks, setTasks] = useState([]);
@@ -22,27 +23,55 @@ export default function TimerView() {
   const hoursInputRef = useRef(null);
   const minutesInputRef = useRef(null);
   const secondsInputRef = useRef(null);
+  const completedTimersRef = useRef(new Set()); // Track timers that have been marked for completion
 
-  const handleTimerComplete = async (timerId) => {
+  const handleTimerComplete = useCallback(async (timerId) => {
+    // Prevent duplicate completion calls
+    if (completedTimersRef.current.has(timerId)) {
+      console.log('Timer already being completed:', timerId);
+      return;
+    }
+    completedTimersRef.current.add(timerId);
+    
     // Automatically stop timer when it reaches zero
     try {
+      // Get timer from current state
       const timer = activeTimers.find(t => t.id === timerId);
+      if (!timer) {
+        console.log('Timer not found in activeTimers:', timerId);
+        completedTimersRef.current.delete(timerId);
+        return;
+      }
+      
+      console.log('[TIMER COMPLETE] Timer completing:', timerId, timer);
+      
       await axios.post(`${API_BASE_URL}/api/timer/${timerId}/stop`);
       await loadActiveTimers();
-      // Show notification instead of alert
-      if (timer) {
-        const task = timer.task_id ? tasks.find(t => t.id === timer.task_id) : null;
-        const timerDisplayName = timer.name || (task ? task.title : 'Timer');
-        
-        addNotification({
-          type: 'timer',
-          title: 'Timer Completed!',
-          message: `"${timerDisplayName}" has finished.`,
-          persistent: false
-        });
-      }
+      
+      // Show notification - get fresh task list
+      const currentTasks = tasks; // Use closure value
+      const task = timer.task_id ? currentTasks.find(t => t.id === timer.task_id) : null;
+      const timerDisplayName = timer.name || (task ? task.title : 'Timer');
+      
+      console.log('[TIMER COMPLETE] Adding notification for timer:', timerDisplayName);
+      console.log('[TIMER COMPLETE] addNotification function:', typeof addNotification);
+      
+      addNotification({
+        type: 'timer',
+        title: `Timer: ${timerDisplayName}`,
+        message: `Your timer "${timerDisplayName}" has finished!`,
+        persistent: false
+      });
+      
+      console.log('[TIMER COMPLETE] Notification added');
+      
+      // Remove from completed set after a delay to allow for re-use
+      setTimeout(() => {
+        completedTimersRef.current.delete(timerId);
+      }, 2000);
     } catch (error) {
-      console.error('Failed to complete timer:', error);
+      console.error('[TIMER COMPLETE] Failed to complete timer:', error);
+      completedTimersRef.current.delete(timerId);
       addNotification({
         type: 'error',
         title: 'Timer Error',
@@ -50,7 +79,7 @@ export default function TimerView() {
         persistent: false
       });
     }
-  };
+  }, [activeTimers, tasks, addNotification]);
 
   // Load timers and tasks on mount
   useEffect(() => {
@@ -68,6 +97,8 @@ export default function TimerView() {
     // Set up interval to update every second
     intervalRef.current = setInterval(() => {
       setActiveTimers(prevTimers => {
+        const timersToComplete = [];
+        
         prevTimers.forEach(timer => {
           if (timer.status === 'active') {
             const now = new Date();
@@ -99,9 +130,9 @@ export default function TimerView() {
                 [timer.id]: remaining
               }));
 
-              // If timer reached zero, mark as completed
-              if (remaining === 0) {
-                handleTimerComplete(timer.id);
+              // If timer reached zero or less, mark for completion
+              if (remaining <= 0 && !completedTimersRef.current.has(timer.id)) {
+                timersToComplete.push(timer.id);
               }
             }
           } else if (timer.status === 'paused') {
@@ -113,6 +144,16 @@ export default function TimerView() {
             }));
           }
         });
+        
+        // Handle completions outside the setState callback to avoid issues
+        if (timersToComplete.length > 0) {
+          setTimeout(() => {
+            timersToComplete.forEach(timerId => {
+              handleTimerComplete(timerId);
+            });
+          }, 0);
+        }
+        
         return prevTimers;
       });
     }, 1000);
@@ -122,13 +163,21 @@ export default function TimerView() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [activeTimers.length, tasks]);
+  }, [activeTimers.length, tasks, handleTimerComplete]);
 
   const loadActiveTimers = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/timer/active`);
       const timers = response.data || [];
       setActiveTimers(timers);
+      
+      // Clear completed timers ref for timers that are no longer active
+      const activeTimerIds = new Set(timers.map(t => t.id));
+      completedTimersRef.current.forEach(timerId => {
+        if (!activeTimerIds.has(timerId)) {
+          completedTimersRef.current.delete(timerId);
+        }
+      });
       
       // Calculate initial time remaining for each timer
       const newTimeRemaining = {};
@@ -277,7 +326,7 @@ export default function TimerView() {
       
       // Reset timer inputs
       setTimerHours(0);
-      setTimerMinutes(25);
+      setTimerMinutes(0);
       setTimerSeconds(0);
       setFocusedInput(null);
       
@@ -723,7 +772,7 @@ export default function TimerView() {
                 onClick={() => {
                   setShowNewTimerForm(false);
                   setTimerHours(0);
-                  setTimerMinutes(25);
+                  setTimerMinutes(0);
                   setTimerSeconds(0);
                   setTimerName('');
                 }}
