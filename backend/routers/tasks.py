@@ -269,8 +269,9 @@ def create_task(
                     schedule.optimization_score = sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items) if scheduled_items else schedule.optimization_score
                     db.commit()
                 
-                # Clear old schedule items for this schedule
+                # Clear old schedule items for this schedule to prevent duplicates
                 db.query(ScheduleItem).filter(ScheduleItem.schedule_id == schedule.id).delete()
+                db.commit()  # Commit deletion before adding new items
                 
                 # Create new schedule items
                 for item_data in scheduled_items:
@@ -361,8 +362,9 @@ def create_task(
                     schedule.optimization_score = sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items) if scheduled_items else schedule.optimization_score
                     db.commit()
                 
-                # Clear old schedule items for this schedule
+                # Clear old schedule items for this schedule to prevent duplicates
                 db.query(ScheduleItem).filter(ScheduleItem.schedule_id == schedule.id).delete()
+                db.commit()  # Commit deletion before adding new items
                 
                 # Create new schedule items
                 for item_data in scheduled_items:
@@ -485,6 +487,7 @@ def update_task(
     db.refresh(task)
     
     # Automatically update schedule when task is added, updated, or completed
+    # This ensures the schedule is always optimized after any task change
     try:
         from datetime import timedelta
         from backend.db_models import Schedule, ScheduleItem
@@ -499,10 +502,14 @@ def update_task(
         optimize_func = schedule_module.optimize_schedule_with_ml
         
         # Get all pending/scheduled tasks (excluding completed ones)
+        # Also exclude tasks that were just completed (to remove them from schedule)
         pending_tasks = db.query(Task).filter(
             Task.account_id == current_user.id,
             Task.status.in_(["pending", "scheduled"])
         ).all()
+        
+        # If a task was just completed, we still want to re-optimize the schedule
+        # to fill the gap and reschedule remaining tasks
         
         if pending_tasks:
             # Determine which date to schedule for
@@ -559,8 +566,9 @@ def update_task(
                     schedule.optimization_score = sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items)
                     db.commit()
                 
-                # Clear old schedule items for this schedule
+                # Clear old schedule items for this schedule to prevent duplicates
                 db.query(ScheduleItem).filter(ScheduleItem.schedule_id == schedule.id).delete()
+                db.commit()  # Commit deletion before adding new items
                 
                 # Create new schedule items
                 for item_data in scheduled_items:

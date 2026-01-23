@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 # Add project root to sys.path to allow importing existing modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.routers import users, research, simulation, analytics, debug, auth, tasks, schedule, timer
+from backend.routers import users, research, simulation, analytics, debug, auth, tasks, schedule, timer, admin
 from backend.database import init_db
 
 @asynccontextmanager
@@ -51,6 +51,9 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(schedule.router, prefix="/api/schedule", tags=["Schedule"])
 app.include_router(timer.router, prefix="/api/timer", tags=["Timer"])
+
+# Admin routers (admin only)
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 # Legacy/Admin routers (for simulations and debugging)
 app.include_router(users.router, prefix="/api/users", tags=["Users (Legacy)"])

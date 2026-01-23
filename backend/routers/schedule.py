@@ -19,44 +19,91 @@ from backend.models import ScheduleOptimizeRequest, ScheduleResponse, ScheduleIt
 
 router = APIRouter()
 
-def can_split_task(task: Task) -> bool:
-    """
-    Determine if a task can be split into multiple time slots.
-    Tasks that can be split: long tasks (>2 hours), non-urgent, not meetings/deadlines.
-    """
-    # Don't split if task is too short
-    if task.estimated_minutes < 120:  # Less than 2 hours
-        return False
-    
-    # Don't split urgent tasks or tasks with deadlines
-    if task.priority >= 5 or task.deadline:
-        return False
-    
-    # Don't split tasks with specific tags that indicate they shouldn't be split
-    tags = task.tags or []
-    non_splittable_tags = ["meeting", "deadline", "urgent", "one-shot", "continuous"]
-    if any(tag in non_splittable_tags for tag in tags):
-        return False
-    
-    # Can split if it's a long task that's not urgent
-    return True
+# Chunking system removed - tasks are scheduled as single blocks
 
-def get_optimal_chunk_size(task: Task) -> int:
+def infer_appropriate_time_slot(task: Task) -> dict:
     """
-    Get optimal chunk size for splitting a task (in minutes).
-    Prefers 60-90 minute chunks for focus, but adapts to task characteristics.
-    """
-    total_minutes = task.estimated_minutes
+    Intelligently infer appropriate time slots for a task based on:
+    - Task title (keywords like "breakfast", "dinner", "morning", "evening")
+    - Category (work, personal, health, daily)
+    - Tags
+    - Task type patterns
     
-    # For very long tasks (>4 hours), use 90-minute chunks
-    if total_minutes > 240:
-        return 90
-    # For medium-long tasks (2-4 hours), use 60-minute chunks
-    elif total_minutes > 120:
-        return 60
-    # For tasks just over 2 hours, try 45-minute chunks
-    else:
-        return 45
+    Returns: dict with "preferred_hours" (list of hour ranges) and "penalty_hours" (list of hour ranges to avoid)
+    """
+    title_lower = (task.title or "").lower()
+    category_lower = (task.category or "").lower()
+    tags = [tag.lower() if isinstance(tag, str) else str(tag).lower() for tag in (task.tags or [])]
+    
+    preferred_hours = []  # List of (start_hour, end_hour) tuples
+    penalty_hours = []    # Hours to heavily penalize
+    
+    # Morning tasks (6 AM - 12 PM)
+    morning_keywords = ["breakfast", "morning", "wake", "coffee", "meditation", "yoga", "exercise", "workout", "gym", "run", "jog"]
+    if any(kw in title_lower for kw in morning_keywords) or "morning" in tags:
+        preferred_hours.append((6, 12))
+        penalty_hours.extend([(12, 17), (17, 22)])  # Penalize afternoon/evening
+    
+    # Afternoon tasks (12 PM - 5 PM)
+    afternoon_keywords = ["lunch", "afternoon", "meeting", "call", "conference"]
+    if any(kw in title_lower for kw in afternoon_keywords) or "afternoon" in tags:
+        preferred_hours.append((12, 17))
+        penalty_hours.extend([(6, 12), (17, 22)])  # Penalize morning/evening
+    
+    # Evening tasks (5 PM - 10 PM)
+    evening_keywords = ["dinner", "evening", "night", "supper", "cook", "prep", "meal prep", "cooking"]
+    if any(kw in title_lower for kw in evening_keywords) or "evening" in tags:
+        preferred_hours.append((17, 22))
+        penalty_hours.extend([(6, 12), (12, 17)])  # Penalize morning/afternoon
+    
+    # Work tasks - prefer business hours (9 AM - 5 PM)
+    work_keywords = ["work", "project", "code", "develop", "meeting", "call", "email", "report", "presentation", "deadline"]
+    if category_lower == "work" or any(kw in title_lower for kw in work_keywords):
+        preferred_hours.append((9, 17))
+        penalty_hours.extend([(6, 9), (17, 22)])  # Penalize early morning/late evening
+    
+    # Personal/health tasks - more flexible but avoid work hours
+    if category_lower in ["personal", "health", "daily"]:
+        # Personal tasks can be morning or evening, but not during peak work hours
+        if "morning" not in title_lower and "evening" not in title_lower and "dinner" not in title_lower:
+            preferred_hours.extend([(6, 9), (17, 22)])  # Early morning or evening
+            penalty_hours.append((9, 17))  # Avoid work hours
+    
+    # Meal-related tasks
+    meal_keywords = ["breakfast", "lunch", "dinner", "supper", "cook", "prep", "meal", "eat"]
+    for kw in meal_keywords:
+        if kw in title_lower:
+            if kw in ["breakfast", "coffee"]:
+                preferred_hours.append((6, 10))
+                penalty_hours.extend([(10, 17), (17, 22)])
+            elif kw in ["lunch"]:
+                preferred_hours.append((11, 14))
+                penalty_hours.extend([(6, 11), (14, 22)])
+            elif kw in ["dinner", "supper", "cook", "prep", "meal prep", "cooking"]:
+                preferred_hours.append((17, 21))
+                penalty_hours.extend([(6, 17)])
+    
+    # Chores/household tasks - prefer morning or evening, not work hours
+    chore_keywords = ["clean", "laundry", "dishes", "vacuum", "organize", "tidy", "grocery", "shopping"]
+    if any(kw in title_lower for kw in chore_keywords) or category_lower == "daily":
+        if not preferred_hours:  # Only if no other preferences set
+            preferred_hours.extend([(6, 9), (17, 22)])
+            penalty_hours.append((9, 17))
+    
+    # Check for preferred_time tag
+    for tag in tags:
+        if tag.startswith("preferred_time:"):
+            try:
+                time_str = tag.split(":", 1)[1]
+                hour = int(time_str.split(":")[0])
+                preferred_hours.append((max(0, hour - 1), min(23, hour + 2)))  # ±1 hour window
+            except:
+                pass
+    
+    return {
+        "preferred_hours": preferred_hours,
+        "penalty_hours": penalty_hours
+    }
 
 def optimize_schedule_with_ml(
     tasks: List[Task],
@@ -147,8 +194,9 @@ def optimize_schedule_with_ml(
     if coordinator:
         try:
             # Create context for ML evaluation
-            # Get historical timer data for better estimates
+            # Get historical timer data for better estimates - enhanced with user patterns
             timer_history = {}
+            user_time_patterns = {}  # task_id -> list of actual durations
             if account_id and db:
                 from backend.db_models import TimerSession
                 # Get recent timer sessions for this user to learn from actual times
@@ -156,17 +204,27 @@ def optimize_schedule_with_ml(
                     TimerSession.account_id == account_id,
                     TimerSession.status == "completed",
                     TimerSession.actual_seconds.isnot(None)
-                ).order_by(TimerSession.completed_at.desc()).limit(50).all()
+                ).order_by(TimerSession.completed_at.desc()).limit(100).all()  # Increased limit for better data
                 
                 # Build a map of task patterns -> actual durations
                 for timer in recent_timers:
                     if timer.task_id:
                         task = db.query(Task).filter(Task.id == timer.task_id).first()
                         if task:
-                            key = f"{task.category}_{task.difficulty}"
+                            # Pattern-based history (category + difficulty)
+                            key = f"{task.category or 'general'}_{task.difficulty}"
                             if key not in timer_history:
                                 timer_history[key] = []
                             timer_history[key].append(timer.actual_seconds / 60)  # Convert to minutes
+                            
+                            # Task-specific history (for exact task matches)
+                            if timer.task_id not in user_time_patterns:
+                                user_time_patterns[timer.task_id] = []
+                            user_time_patterns[timer.task_id].append(timer.actual_seconds / 60)
+            
+            # Make timer data available for ML scoring
+            ml_timer_history = timer_history
+            ml_user_patterns = user_time_patterns
             
             # Batch process tasks for ML scoring (more efficient)
             task_strategies = []
@@ -395,32 +453,45 @@ def optimize_schedule_with_ml(
                     elif "evening" in task_tags:
                         time_boost += 0.05
                     
-                    # Use timer history to adjust estimates if available
-                    if timer_history:
-                        task_key = f"{task.category or 'general'}_{task.difficulty}"
-                        if task_key in timer_history:
-                            avg_actual = sum(timer_history[task_key]) / len(timer_history[task_key])
-                            # If actual times are consistently different, adjust score
-                            if task.estimated_minutes:
-                                accuracy_ratio = avg_actual / task.estimated_minutes
-                                if 0.8 <= accuracy_ratio <= 1.2:
-                                    time_boost += 0.05  # Good estimate accuracy
-                                    research_reason.append("Timer data: Good time estimates")
-                                elif accuracy_ratio > 1.5:
-                                    # Task takes longer than estimated - slight penalty
-                                    time_boost -= 0.05
-                                    research_reason.append("Timer data: Task often takes longer")
+                    # Use timer history to adjust estimates if available - enhanced with user data
+                    estimated_duration = task.estimated_minutes
+                    if ml_timer_history or ml_user_patterns:
+                        # Prefer task-specific history if available
+                        if task.id in ml_user_patterns and len(ml_user_patterns[task.id]) >= 3:
+                            # Use actual average for this specific task
+                            avg_actual = sum(ml_user_patterns[task.id]) / len(ml_user_patterns[task.id])
+                            estimated_duration = int(avg_actual)  # Use actual average
+                            research_reason.append(f"User data: {len(ml_user_patterns[task.id])} previous completions")
+                        else:
+                            # Fall back to pattern-based history
+                            task_key = f"{task.category or 'general'}_{task.difficulty}"
+                            if task_key in ml_timer_history and len(ml_timer_history[task_key]) >= 3:
+                                avg_actual = sum(ml_timer_history[task_key]) / len(ml_timer_history[task_key])
+                                # Adjust estimate based on pattern - blend user data with estimate
+                                estimated_duration = int((estimated_duration * 0.3 + avg_actual * 0.7))  # Weight actual data more
+                                research_reason.append(f"Pattern data: {len(ml_timer_history[task_key])} similar tasks")
+                        
+                        # Boost score if estimates are accurate
+                        if task.estimated_minutes and estimated_duration:
+                            accuracy_ratio = estimated_duration / task.estimated_minutes
+                            if 0.85 <= accuracy_ratio <= 1.15:
+                                time_boost += 0.08  # Good estimate accuracy
+                            elif accuracy_ratio > 1.3:
+                                # Task takes longer - slight penalty but still schedule it
+                                time_boost -= 0.03
+                                research_reason.append("Note: Task often takes longer than estimated")
                     
                     # Apply research boost and time boost (capped at reasonable limits)
                     ml_score = min(1.0, max(0.0, base_ml_score + research_boost + time_boost))
                     
-                    # Store research reasoning for later use
+                    # Store research reasoning and adjusted duration for later use
                     task_scores[task_id] = {
                         "score": ml_score,
                         "research_reasons": research_reason,
                         "base_score": base_ml_score,
                         "research_boost": research_boost,
-                        "time_boost": time_boost
+                        "time_boost": time_boost,
+                        "adjusted_duration": estimated_duration  # Store for scheduling
                     }
             except Exception as e:
                 print(f"[WARNING] Batch ML scoring failed: {e}")
@@ -442,7 +513,8 @@ def optimize_schedule_with_ml(
                     "research_reasons": [],
                     "base_score": task.priority / 5.0,
                     "research_boost": 0.0,
-                    "time_boost": 0.0
+                    "time_boost": 0.0,
+                    "adjusted_duration": task.estimated_minutes
                 }
     
     # Expand recurring tasks into multiple instances for the week
@@ -477,21 +549,26 @@ def optimize_schedule_with_ml(
             # Non-recurring task - add once
             expanded_tasks.append((task, None))
     
-    # Prepare tasks for scheduling - split tasks that can be split
-    task_chunks = {}  # (task_id, day_date) -> list of chunks (remaining minutes)
+    # Prepare tasks for scheduling - NO CHUNKING, schedule as single blocks
+    # Use user data to adjust time estimates
+    task_durations = {}  # (task_id, day_date) -> adjusted duration in minutes
     for task, day_date in expanded_tasks:
         task_key = (task.id, day_date)
-        if can_split_task(task):
-            chunk_size = get_optimal_chunk_size(task)
-            chunks = []
-            remaining = task.estimated_minutes
-            while remaining > 0:
-                chunk_mins = min(chunk_size, remaining)
-                chunks.append(chunk_mins)
-                remaining -= chunk_mins
-            task_chunks[task_key] = chunks
+        
+        # Get adjusted duration from ML scoring (uses user timer data)
+        base_duration = task.estimated_minutes
+        if task_scores and task.id in task_scores:
+            score_data = task_scores[task.id]
+            if isinstance(score_data, dict) and "adjusted_duration" in score_data:
+                base_duration = score_data["adjusted_duration"]
+        
+        # Apply completion accuracy if available
+        if task.completion_accuracy and task.completion_accuracy > 0:
+            adjusted_duration = int(base_duration * task.completion_accuracy)
         else:
-            task_chunks[task_key] = [task.estimated_minutes]
+            adjusted_duration = base_duration
+        
+        task_durations[task_key] = adjusted_duration
     
     # Sort expanded tasks using ML scores (with research enhancements) if available, otherwise use priority
     # Also prioritize tasks with deadlines that are approaching
@@ -534,18 +611,21 @@ def optimize_schedule_with_ml(
     
     sorted_expanded_tasks = sorted(expanded_tasks, key=get_task_score)
     
-    # Track which chunks of which tasks have been scheduled
-    scheduled_chunks = {}  # (task_id, day_date) -> list of scheduled chunk indices
+    # Track which tasks have been scheduled to prevent duplicates
+    scheduled_task_keys = set()
     
-    # Schedule tasks across multiple days with task splitting
+    # Schedule tasks across multiple days - NO CHUNKING, single blocks only
     for task, day_date in sorted_expanded_tasks:
         task_key = (task.id, day_date)
-        chunks = task_chunks.get(task_key, [task.estimated_minutes])
-        scheduled_chunks[task_key] = []
+        
+        # Skip if already scheduled (prevent duplicates)
+        if task_key in scheduled_task_keys:
+            continue
+        
+        # Get adjusted duration (uses user timer data)
+        task_minutes = task_durations.get(task_key, task.estimated_minutes)
         
         # Determine which day slots this task can be scheduled on
-        # For recurring tasks with a specific day, only consider that day
-        # For tasks with deadlines, prioritize scheduling before deadline
         eligible_day_slots = []
         if day_date:
             # Recurring task - find the matching day slot
@@ -563,160 +643,219 @@ def optimize_schedule_with_ml(
             # Regular task - can be scheduled on any day
             eligible_day_slots = [(idx, slot) for idx, slot in enumerate(day_slots)]
         
-        for chunk_idx, chunk_minutes in enumerate(chunks):
-            # Find the best day and time slot for this chunk
-            best_slot = None
-            best_score = -1
+        # Find the best day and time slot for this task
+        best_slot = None
+        best_score = -1
+        
+        # Calculate overflow allowance for urgent tasks (outside loop for efficiency)
+        overflow_allowance = 30 if task.priority >= 4 or (task.deadline and isinstance(task.deadline, datetime) and (task.deadline.date() - schedule_date_only).days <= 1) else 0
+        
+        for day_idx, day_slot in eligible_day_slots:
+            # Calculate available time including buffer for breaks
+            available_time = (day_slot["end"] - day_slot["current_time"]).total_seconds() / 60
             
-            for day_idx, day_slot in eligible_day_slots:
-                # Check if this day has enough time
-                if day_slot["current_time"] + timedelta(minutes=chunk_minutes) > day_slot["end"] + timedelta(hours=2):
-                    continue
-                
-                # For tasks with deadlines, ensure we schedule before deadline
-                if task.deadline:
-                    deadline_datetime = task.deadline if isinstance(task.deadline, datetime) else datetime.combine(task.deadline, datetime.min.time())
-                    if day_slot["current_time"] > deadline_datetime:
-                        continue  # Skip slots after deadline
-                
-                # Calculate score for this time slot
-                slot_hour = day_slot["current_time"].hour
-                slot_energy = day_slot["energy"]
-                slot_stress = day_slot["stress"]
-                
-                # Get ML score for this time slot
-                score_data = task_scores.get(task.id) if task_scores else None
-                if isinstance(score_data, dict):
-                    base_score = score_data["score"]
-                else:
-                    base_score = task.priority / 5.0 if score_data is None else (score_data if isinstance(score_data, (int, float)) else task.priority / 5.0)
-                
-                # Adjust score based on current day/time slot
-                time_boost = 0.0
+            # Need time for task + minimum break (5 minutes) + buffer (2 minutes)
+            required_time = task_minutes + 7  # Task + break + buffer
+            
+            # Check if task fits (with small overflow allowance for urgent tasks only)
+            if available_time < required_time - overflow_allowance:
+                continue
+            
+            # For tasks with deadlines, ensure we schedule before deadline
+            if task.deadline:
+                deadline_datetime = task.deadline if isinstance(task.deadline, datetime) else datetime.combine(task.deadline, datetime.min.time())
+                if day_slot["current_time"] > deadline_datetime:
+                    continue  # Skip slots after deadline
+            
+            # Calculate score for this time slot
+            slot_hour = day_slot["current_time"].hour
+            slot_energy = day_slot["energy"]
+            slot_stress = day_slot["stress"]
+            
+            # Get ML score for this time slot
+            score_data = task_scores.get(task.id) if task_scores else None
+            if isinstance(score_data, dict):
+                base_score = score_data["score"]
+            else:
+                base_score = task.priority / 5.0 if score_data is None else (score_data if isinstance(score_data, (int, float)) else task.priority / 5.0)
+            
+            # Intelligently adjust score based on task content and time slot
+            time_boost = 0.0
+            time_penalty = 0.0  # Initialize time_penalty
+            
+            # Infer appropriate time slots from task content
+            time_preferences = infer_appropriate_time_slot(task)
+            preferred_hours = time_preferences["preferred_hours"]
+            penalty_hours = time_preferences["penalty_hours"]
+            
+            # Check if current slot is in preferred hours
+            in_preferred = False
+            for start_hour, end_hour in preferred_hours:
+                if start_hour <= slot_hour < end_hour:
+                    in_preferred = True
+                    time_boost += 0.5  # Strong boost for correct time
+                    break
+            
+            # Check if current slot is in penalty hours (wrong time)
+            in_penalty = False
+            for start_hour, end_hour in penalty_hours:
+                if start_hour <= slot_hour < end_hour:
+                    in_penalty = True
+                    time_penalty += 0.6  # Strong penalty for wrong time
+                    break
+            
+            # Fallback: check tags if no intelligent inference
+            if not preferred_hours and not penalty_hours:
                 task_tags = task.tags or []
                 if "morning" in task_tags and 6 <= slot_hour < 12:
-                    time_boost += 0.15
+                    time_boost += 0.3
                 elif "afternoon" in task_tags and 12 <= slot_hour < 17:
-                    time_boost += 0.15
+                    time_boost += 0.3
                 elif "evening" in task_tags and 17 <= slot_hour < 22:
-                    time_boost += 0.15
+                    time_boost += 0.3
+                elif "morning" in task_tags and not (6 <= slot_hour < 12):
+                    time_penalty += 0.4
+                elif "afternoon" in task_tags and not (12 <= slot_hour < 17):
+                    time_penalty += 0.4
+                elif "evening" in task_tags and not (17 <= slot_hour < 22):
+                    time_penalty += 0.4
                 
-                # Energy match
-                energy_match = abs(slot_energy - task.energy_required)
-                
-                slot_score = (
-                    base_score * 0.4 +
-                    (1 - energy_match) * 0.3 +
-                    (1 - slot_stress) * 0.2 +
-                    time_boost * 0.1
-                )
-                
-                if slot_score > best_score:
-                    best_score = slot_score
-                    best_slot = (day_idx, day_slot)
+                # Check for preferred_time tag
+                for tag in task_tags:
+                    if tag.startswith("preferred_time:"):
+                        try:
+                            preferred_hour = int(tag.split(":")[1].split(":")[0])
+                            if abs(slot_hour - preferred_hour) <= 1:  # Within 1 hour of preferred time
+                                time_boost += 0.4
+                            elif abs(slot_hour - preferred_hour) > 3:  # More than 3 hours away
+                                time_penalty += 0.3
+                        except:
+                            pass
             
-            if not best_slot:
-                # Can't fit this chunk anywhere
-                continue
+            # Energy match
+            energy_match = abs(slot_energy - task.energy_required)
             
-            day_idx, day_slot = best_slot
-            current_time = day_slot["current_time"]
+            # Penalize if task would extend significantly past work hours
+            task_end_time = day_slot["current_time"] + timedelta(minutes=task_minutes)
+            overflow_penalty = 0.0
+            if task_end_time > day_slot["end"]:
+                overflow_minutes = ((task_end_time - day_slot["end"]).total_seconds() / 60)
+                if overflow_minutes > 60:  # More than 1 hour overflow
+                    overflow_penalty = 0.3
+                elif overflow_minutes > 30:  # More than 30 min overflow
+                    overflow_penalty = 0.15
             
-            # Calculate task duration
-            estimated_duration = chunk_minutes
-            if task.completion_accuracy and task.completion_accuracy > 0:
-                estimated_duration = int(estimated_duration * task.completion_accuracy)
+            # Time appropriateness is now a major factor (40% weight)
+            # This ensures tasks are scheduled at appropriate times
+            slot_score = (
+                base_score * 0.3 +           # ML score (reduced from 0.4)
+                (1 - energy_match) * 0.2 +   # Energy match (reduced from 0.3)
+                (1 - slot_stress) * 0.1 +   # Stress level (reduced from 0.2)
+                time_boost * 0.3 -          # Time boost (increased from 0.1, now major factor)
+                time_penalty * 0.3 -        # Time penalty (new, heavily penalizes wrong times)
+                overflow_penalty * 0.2       # Overflow penalty (reduced from direct subtraction)
+            )
             
-            task_duration = timedelta(minutes=estimated_duration)
-            chunk_end = current_time + task_duration
-            
-            # Check if chunk fits (with 2-hour overflow allowance)
-            effective_end = day_slot["end"] + timedelta(hours=2)
-            if chunk_end > effective_end:
-                continue
-            
-            # Create schedule item for this chunk
-            # Use task_key instead of task.id since scheduled_chunks uses (task_id, day_date) as key
-            chunk_num = len(scheduled_chunks.get(task_key, [])) + 1
-            total_chunks = len(chunks)
-            chunk_label = f" (Part {chunk_num}/{total_chunks})" if total_chunks > 1 else ""
-            
-            # For recurring tasks, add day indicator to title
-            if day_date:
-                try:
-                    day_label = day_date.strftime(" (%a %b %d)")
-                    chunk_label = day_label + chunk_label
-                except:
-                    pass  # Skip if date formatting fails
-            
-            score_data = task_scores.get(task.id) if task_scores else None
-            research_reasons = score_data.get("research_reasons", []) if isinstance(score_data, dict) else []
-            
-            # Get base_score for this task (used in reason string)
-            score_data_for_reason = task_scores.get(task.id) if task_scores else None
-            if isinstance(score_data_for_reason, dict):
-                base_score_for_reason = score_data_for_reason["score"]
-            else:
-                base_score_for_reason = task.priority / 5.0
-            
-            goes_past_end = chunk_end > day_slot["end"]
-            if goes_past_end:
-                overflow_minutes = ((chunk_end - day_slot["end"]).total_seconds() / 60)
-                base_reason = f"ML Score: {base_score_for_reason:.2f}, Priority: {task.priority}, Chunk {chunk_num}/{total_chunks} (Extends {overflow_minutes:.0f} min past work hours)"
-                confidence_score = best_score * 0.85
-            else:
-                base_reason = f"ML Score: {base_score_for_reason:.2f}, Priority: {task.priority}, Chunk {chunk_num}/{total_chunks}"
-                confidence_score = best_score
-            
-            if research_reasons:
-                research_note = " | Research: " + ", ".join(research_reasons[:2])
-                placement_reason = base_reason + research_note
-            else:
-                placement_reason = base_reason
-            
-            item = {
-                "task_id": task.id,
-                "task_title": task.title + chunk_label,
-                "start_time": current_time,
-                "end_time": chunk_end,
-                "placement_reason": placement_reason,
-                "confidence_score": confidence_score,
-                "chunk_index": chunk_idx,
-                "total_chunks": total_chunks
-            }
-            
-            scheduled_items.append(item)
-            scheduled_chunks[task_key].append(chunk_idx)
-            
-            # Update day slot
-            energy_drain = task.energy_required * 0.15
-            day_slot["energy"] = max(0.1, day_slot["energy"] - energy_drain)
-            
-            # Calculate break duration based on task characteristics and time remaining
-            time_remaining_after = (day_slot["end"] - chunk_end).total_seconds() / 60
-            hours_worked_today = (current_time - day_slot["start"]).total_seconds() / 3600
-            
-            # Longer breaks after longer tasks or after several hours
-            if goes_past_end or time_remaining_after < 30:
-                break_duration = 0
-            elif hours_worked_today > 6:  # After 6 hours, need longer breaks
-                break_duration = 15 if task.energy_required > 0.7 else 10
-            elif hours_worked_today > 4:  # After 4 hours, moderate breaks
-                break_duration = 10 if task.energy_required > 0.6 else 5
-            elif chunk_minutes > 90:  # Long task chunk
-                break_duration = 10 if task.energy_required > 0.7 else 5
-            elif chunk_minutes > 60:  # Medium task chunk
-                break_duration = 5 if task.energy_required > 0.6 else 3
-            else:  # Short task chunk
-                break_duration = 3 if task.energy_required > 0.5 else 2
-            
-            # Update current time for this day
-            day_slot["current_time"] = chunk_end + timedelta(minutes=break_duration)
-            
-            # Energy recovery during break
-            if break_duration > 0:
-                recovery = min(0.1, break_duration * 0.01)  # Small energy recovery
-                day_slot["energy"] = min(1.0, day_slot["energy"] + recovery)
+            if slot_score > best_score:
+                best_score = slot_score
+                best_slot = (day_idx, day_slot)
+        
+        if not best_slot:
+            # Can't fit this task anywhere
+            continue
+        
+        day_idx, day_slot = best_slot
+        current_time = day_slot["current_time"]
+        
+        # Use adjusted duration from user data
+        task_duration = timedelta(minutes=task_minutes)
+        task_end = current_time + task_duration
+        
+        # Check if task fits (with overflow allowance for urgent tasks)
+        effective_end = day_slot["end"] + timedelta(minutes=overflow_allowance)
+        if task_end > effective_end:
+            continue
+        
+        # For recurring tasks, add day indicator to title
+        task_label = ""
+        if day_date:
+            try:
+                task_label = day_date.strftime(" (%a %b %d)")
+            except:
+                pass
+        
+        score_data = task_scores.get(task.id) if task_scores else None
+        research_reasons = score_data.get("research_reasons", []) if isinstance(score_data, dict) else []
+        
+        # Get base_score for this task (used in reason string)
+        score_data_for_reason = task_scores.get(task.id) if task_scores else None
+        if isinstance(score_data_for_reason, dict):
+            base_score_for_reason = score_data_for_reason["score"]
+        else:
+            base_score_for_reason = task.priority / 5.0
+        
+        goes_past_end = task_end > day_slot["end"]
+        if goes_past_end:
+            overflow_minutes = ((task_end - day_slot["end"]).total_seconds() / 60)
+            base_reason = f"ML Score: {base_score_for_reason:.2f}, Priority: {task.priority} (Extends {overflow_minutes:.0f} min past work hours)"
+            confidence_score = best_score * 0.85
+        else:
+            base_reason = f"ML Score: {base_score_for_reason:.2f}, Priority: {task.priority}"
+            confidence_score = best_score
+        
+        if research_reasons:
+            research_note = " | Research: " + ", ".join(research_reasons[:2])
+            placement_reason = base_reason + research_note
+        else:
+            placement_reason = base_reason
+        
+        item = {
+            "task_id": task.id,
+            "task_title": task.title + task_label,
+            "start_time": current_time,
+            "end_time": task_end,
+            "placement_reason": placement_reason,
+            "confidence_score": confidence_score
+        }
+        
+        scheduled_items.append(item)
+        scheduled_task_keys.add(task_key)
+        
+        # Update day slot
+        energy_drain = task.energy_required * 0.15
+        day_slot["energy"] = max(0.1, day_slot["energy"] - energy_drain)
+        
+        # Calculate break duration based on task characteristics and time remaining
+        time_remaining_after = (day_slot["end"] - task_end).total_seconds() / 60
+        hours_worked_today = (current_time - day_slot["start"]).total_seconds() / 3600
+        
+        # Improved break calculation - prevents overlap and accounts for user patterns
+        if goes_past_end or time_remaining_after < 15:
+            break_duration = 0  # No break if at end of day or very little time left
+        elif hours_worked_today > 6:  # After 6 hours, need longer breaks
+            break_duration = 15 if task.energy_required > 0.7 else 10
+        elif hours_worked_today > 4:  # After 4 hours, moderate breaks
+            break_duration = 10 if task.energy_required > 0.6 else 5
+        elif task_minutes > 120:  # Long task (>2 hours)
+            break_duration = 15 if task.energy_required > 0.7 else 10
+        elif task_minutes > 90:  # Long task (90-120 min)
+            break_duration = 10 if task.energy_required > 0.6 else 5
+        elif task_minutes > 60:  # Medium task (60-90 min)
+            break_duration = 5 if task.energy_required > 0.5 else 3
+        else:  # Short task (<60 min)
+            break_duration = 3 if task.energy_required > 0.4 else 2
+        
+        # Ensure break doesn't cause overlap with next task
+        # Add buffer to prevent tight scheduling
+        break_duration = max(break_duration, 2)  # Minimum 2 minute buffer between tasks
+        
+        # Update current time for this day (task end + break)
+        day_slot["current_time"] = task_end + timedelta(minutes=break_duration)
+        
+        # Energy recovery during break
+        if break_duration > 0:
+            recovery = min(0.15, break_duration * 0.015)  # Improved energy recovery
+            day_slot["energy"] = min(1.0, day_slot["energy"] + recovery)
     
     return scheduled_items
 
@@ -816,18 +955,14 @@ def optimize_schedule(
                 )
                 db.add(schedule_item)
                 
-                # Update task status (only set if this is the first chunk or if task isn't already scheduled)
-                # For split tasks, we keep the task as scheduled but don't overwrite times
+                # Update task status - single block scheduling
                 if task.status != "scheduled" or not task.scheduled_start:
                     task.status = "scheduled"
-                    # Set to first chunk's start time
-                    first_chunk = next((item for item in scheduled_items if item["task_id"] == task.id), None)
-                    if first_chunk:
-                        task.scheduled_start = first_chunk["start_time"]
-                        # Set end time to last chunk's end time
-                        last_chunk = next((item for item in reversed(scheduled_items) if item["task_id"] == task.id), None)
-                        if last_chunk:
-                            task.scheduled_end = last_chunk["end_time"]
+                    # Find the scheduled item for this task
+                    scheduled_item = next((item for item in scheduled_items if item["task_id"] == task.id), None)
+                    if scheduled_item:
+                        task.scheduled_start = scheduled_item["start_time"]
+                        task.scheduled_end = scheduled_item["end_time"]
         
         db.commit()
         

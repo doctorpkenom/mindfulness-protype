@@ -43,9 +43,9 @@ export default function AdminView() {
           Debug & Settings
         </button>
         <button
-          onClick={() => setActiveSection('simulation')}
+          onClick={() => setActiveSection('users')}
           className={`px-4 py-2 border-b-2 transition-colors ${
-            activeSection === 'simulation'
+            activeSection === 'users'
               ? isDark
                 ? 'border-purple-500 text-purple-400'
                 : 'border-emerald-500 text-emerald-600'
@@ -54,8 +54,8 @@ export default function AdminView() {
               : 'border-transparent text-slate-600 hover:text-slate-900'
           }`}
         >
-          <FlaskConical size={18} className="inline mr-2" />
-          Simulation Lab
+          <Users size={18} className="inline mr-2" />
+          User Management
         </button>
         <button
           onClick={() => setActiveSection('testing')}

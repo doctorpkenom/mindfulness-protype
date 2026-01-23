@@ -13,6 +13,7 @@ export default function TestingTab() {
   const [isGenerating, setIsGenerating] = useState({ daily: false, work: false, personal: false });
   const [generatedTasks, setGeneratedTasks] = useState({ daily: [], work: [], personal: [] });
   const [simDataDays, setSimDataDays] = useState(30);
+  const [simDataDaysInput, setSimDataDaysInput] = useState('30');
   const [isGeneratingSimData, setIsGeneratingSimData] = useState(false);
 
   // Daily tasks (chores, cooking) - with daily recurrence and preferred times
@@ -417,6 +418,41 @@ export default function TestingTab() {
     }
   };
 
+  const generateSimulatedData = async () => {
+    if (isGeneratingSimData) return;
+    
+    setIsGeneratingSimData(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_BASE_URL}/api/admin/generate-simulated-data`,
+        { days: simDataDays },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      addNotification({
+        type: 'success',
+        title: 'Simulated Data Generated',
+        message: `Generated ${simDataDays} days of realistic user data for ML training`,
+        persistent: false
+      });
+    } catch (error) {
+      console.error('Failed to generate simulated data:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.detail || 'Failed to generate simulated data',
+        persistent: true
+      });
+    } finally {
+      setIsGeneratingSimData(false);
+    }
+  };
+
   const TaskGeneratorCard = ({ type, title, description, icon: Icon, tasks, color }) => (
     <div className={`p-6 rounded-lg border ${
       isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-slate-200'
@@ -502,41 +538,6 @@ export default function TestingTab() {
       )}
     </div>
   );
-
-  const generateSimulatedData = async () => {
-    if (isGeneratingSimData) return;
-    
-    setIsGeneratingSimData(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${API_BASE_URL}/api/admin/generate-simulated-data`,
-        { days: simDataDays },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      addNotification({
-        type: 'success',
-        title: 'Simulated Data Generated',
-        message: `Generated ${simDataDays} days of realistic user data for ML training`,
-        persistent: false
-      });
-    } catch (error) {
-      console.error('Failed to generate simulated data:', error);
-      addNotification({
-        type: 'error',
-        title: 'Error',
-        message: error.response?.data?.detail || 'Failed to generate simulated data',
-        persistent: true
-      });
-    } finally {
-      setIsGeneratingSimData(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -691,6 +692,7 @@ export default function TestingTab() {
           </button>
         </div>
       </div>
+        </div>
       )}
 
       {/* Simulated Data Tab */}
@@ -723,8 +725,30 @@ export default function TestingTab() {
                   type="number"
                   min="1"
                   max="365"
-                  value={simDataDays}
-                  onChange={(e) => setSimDataDays(parseInt(e.target.value) || 30)}
+                  value={simDataDaysInput}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSimDataDaysInput(value);
+                    // Only update the actual value if it's a valid number
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue) && numValue >= 1 && numValue <= 365) {
+                      setSimDataDays(numValue);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // On blur, ensure we have a valid value
+                    const numValue = parseInt(e.target.value);
+                    if (isNaN(numValue) || numValue < 1) {
+                      setSimDataDaysInput('30');
+                      setSimDataDays(30);
+                    } else if (numValue > 365) {
+                      setSimDataDaysInput('365');
+                      setSimDataDays(365);
+                    } else {
+                      setSimDataDaysInput(String(numValue));
+                      setSimDataDays(numValue);
+                    }
+                  }}
                   className={`w-full px-4 py-2 rounded-lg border ${
                     isDark
                       ? 'bg-neutral-900 border-neutral-700 text-white'
