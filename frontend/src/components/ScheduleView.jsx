@@ -367,38 +367,66 @@ export default function ScheduleView() {
               />
             </div>
             <div className="space-y-3">
-              {schedule.items.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`p-4 rounded-lg border ${
-                    isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-slate-50 border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className={`text-sm font-medium ${
-                          isDark ? 'text-purple-400' : 'text-emerald-600'
-                        }`}>
-                          {formatDate(item.start_time)} {formatTime(item.start_time)} - {formatTime(item.end_time)}
-                        </span>
-                      </div>
-                      <h3 className={`font-semibold mb-1 ${
-                        isDark ? 'text-white' : 'text-slate-900'
+              {(() => {
+                // Filter items to only show tasks for the selected date
+                const selectedDateObj = new Date(selectedDate);
+                const selectedDateStr = selectedDateObj.toDateString();
+                
+                const filteredItems = schedule.items.filter((item) => {
+                  if (!item.start_time) return false;
+                  const itemDate = new Date(item.start_time);
+                  return itemDate.toDateString() === selectedDateStr;
+                });
+                
+                if (filteredItems.length === 0) {
+                  return (
+                    <div className={`p-8 text-center rounded-lg border ${
+                      isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-slate-50 border-slate-200'
+                    }`}>
+                      <p className={`${
+                        isDark ? 'text-neutral-400' : 'text-slate-600'
                       }`}>
-                        {item.task_title}
-                      </h3>
-                      {item.placement_reason && (
-                        <p className={`text-xs ${
-                          isDark ? 'text-neutral-400' : 'text-slate-600'
-                        }`}>
-                          {item.placement_reason}
-                        </p>
-                      )}
+                        No tasks scheduled for {selectedDateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                      </p>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                }
+                
+                return filteredItems
+                  .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+                  .map((item, index) => (
+                    <div
+                      key={item.id || index}
+                      className={`p-4 rounded-lg border ${
+                        isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className={`text-sm font-medium ${
+                              isDark ? 'text-purple-400' : 'text-emerald-600'
+                            }`}>
+                              {formatTime(item.start_time)} - {formatTime(item.end_time)}
+                            </span>
+                          </div>
+                          <h3 className={`font-semibold mb-1 ${
+                            isDark ? 'text-white' : 'text-slate-900'
+                          }`}>
+                            {item.task_title}
+                          </h3>
+                          {item.placement_reason && (
+                            <p className={`text-xs ${
+                              isDark ? 'text-neutral-400' : 'text-slate-600'
+                            }`}>
+                              {item.placement_reason}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ));
+              })()}
             </div>
           </div>
           

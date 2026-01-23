@@ -13,7 +13,9 @@ from ml.models.flow_manager import FlowManager
 from ml.models.attention_manager import AttentionManager
 from ml.models.motivation_booster import MotivationBooster
 from ml.models.zeigarnik_tracker import ZeigarnikTracker
+from ml.models.task_analyzer import TaskAnalyzer
 from data_pipeline.preprocessor import DataPreprocessor
+from data_pipeline.task_preprocessor import TaskPreprocessor
 
 class OnlineCoordinator:
     """
@@ -23,9 +25,11 @@ class OnlineCoordinator:
     """
     def __init__(self):
         self.preprocessor = DataPreprocessor()
+        self.task_preprocessor = TaskPreprocessor()
         
-        # The Expanded Council of Experts
+        # The Expanded Council of Experts (now with Task Analyzer)
         self.experts = [
+            TaskAnalyzer(),            # Task understanding & semantics (NEW - HIGH PRIORITY)
             HabitOptimizer(),           # Consistency & streaks
             StressPredictor(),          # Burnout prevention
             CuriosityTuner(),           # Engagement & exploration
@@ -36,9 +40,11 @@ class OnlineCoordinator:
         ]
         
         # Expert trust weights (dynamically adjustable)
+        # TaskAnalyzer gets highest weight for task understanding
         self.expert_weights = {
+            "task_analyzer": 2.0,       # HIGHEST - Task understanding is critical
             "habit_optimizer": 1.0,
-            "stress_predictor": 1.8,    # Highest priority - safety first
+            "stress_predictor": 1.8,    # High priority - safety first
             "curiosity_tuner": 1.0,
             "flow_manager": 1.2,
             "attention_manager": 1.1,    # Important for focus

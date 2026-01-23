@@ -241,24 +241,50 @@ def create_task(
                     days_ahead=7  # Schedule for a week
                 )
                 
-                # Find or create schedule for the date
-                schedule = db.query(Schedule).filter(
-                    Schedule.account_id == current_user.id,
-                    Schedule.date >= datetime.combine(schedule_date, datetime.min.time()),
-                    Schedule.date < datetime.combine(schedule_date, datetime.min.time()) + timedelta(days=1)
-                ).first()
+                # Check if items span multiple days (weekly schedule)
+                dates = set()
+                for item in scheduled_items:
+                    if item.get("start_time"):
+                        try:
+                            if isinstance(item["start_time"], str):
+                                item_date = datetime.fromisoformat(item["start_time"].replace("Z", "+00:00"))
+                            else:
+                                item_date = item["start_time"]
+                            dates.add(item_date.date())
+                        except:
+                            pass
+                
+                schedule_type = "weekly" if len(dates) > 1 else "daily"
+                
+                # Find or create schedule - for weekly schedules, look for any schedule in the date range
+                if schedule_type == "weekly":
+                    min_date = min(dates) if dates else schedule_date
+                    max_date = max(dates) if dates else schedule_date
+                    schedule = db.query(Schedule).filter(
+                        Schedule.account_id == current_user.id,
+                        Schedule.date >= datetime.combine(min_date, datetime.min.time()),
+                        Schedule.date <= datetime.combine(max_date, datetime.min.time()),
+                        Schedule.schedule_type == "weekly"
+                    ).first()
+                else:
+                    schedule = db.query(Schedule).filter(
+                        Schedule.account_id == current_user.id,
+                        Schedule.date >= datetime.combine(schedule_date, datetime.min.time()),
+                        Schedule.date < datetime.combine(schedule_date, datetime.min.time()) + timedelta(days=1)
+                    ).first()
                 
                 if not schedule:
                     schedule = Schedule(
                         account_id=current_user.id,
                         date=datetime.combine(schedule_date, datetime.min.time()),
-                        schedule_type="daily",
+                        schedule_type=schedule_type,
                         optimization_score=sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items) if scheduled_items else 0.0,
                         optimization_context={
                             "energy": energy,
                             "stress": stress,
                             "work_hours": {"start": work_start, "end": work_end},
-                            "auto_scheduled": True
+                            "auto_scheduled": True,
+                            "days_ahead": 7
                         }
                     )
                     db.add(schedule)
@@ -266,7 +292,15 @@ def create_task(
                     db.refresh(schedule)
                 else:
                     # Update existing schedule
+                    schedule.schedule_type = schedule_type
                     schedule.optimization_score = sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items) if scheduled_items else schedule.optimization_score
+                    schedule.optimization_context = {
+                        "energy": energy,
+                        "stress": stress,
+                        "work_hours": {"start": work_start, "end": work_end},
+                        "auto_scheduled": True,
+                        "days_ahead": 7
+                    }
                     db.commit()
                 
                 # Clear old schedule items for this schedule to prevent duplicates
@@ -538,24 +572,52 @@ def update_task(
             )
             
             if scheduled_items:
-                # Find or create schedule for the date
-                schedule = db.query(Schedule).filter(
-                    Schedule.account_id == current_user.id,
-                    Schedule.date >= datetime.combine(schedule_date, datetime.min.time()),
-                    Schedule.date < datetime.combine(schedule_date, datetime.min.time()) + timedelta(days=1)
-                ).first()
+                # Check if items span multiple days (weekly schedule)
+                dates = set()
+                for item in scheduled_items:
+                    if item.get("start_time"):
+                        try:
+                            if isinstance(item["start_time"], str):
+                                item_date = datetime.fromisoformat(item["start_time"].replace("Z", "+00:00"))
+                            else:
+                                item_date = item["start_time"]
+                            dates.add(item_date.date())
+                        except:
+                            pass
+                
+                schedule_type = "weekly" if len(dates) > 1 else "daily"
+                
+                # Find or create schedule - for weekly schedules, look for any schedule in the date range
+                if schedule_type == "weekly":
+                    # For weekly schedules, find schedule that covers the date range
+                    min_date = min(dates) if dates else schedule_date
+                    max_date = max(dates) if dates else schedule_date
+                    schedule = db.query(Schedule).filter(
+                        Schedule.account_id == current_user.id,
+                        Schedule.date >= datetime.combine(min_date, datetime.min.time()),
+                        Schedule.date <= datetime.combine(max_date, datetime.min.time()),
+                        Schedule.schedule_type == "weekly"
+                    ).first()
+                else:
+                    # For daily schedules, look for exact date
+                    schedule = db.query(Schedule).filter(
+                        Schedule.account_id == current_user.id,
+                        Schedule.date >= datetime.combine(schedule_date, datetime.min.time()),
+                        Schedule.date < datetime.combine(schedule_date, datetime.min.time()) + timedelta(days=1)
+                    ).first()
                 
                 if not schedule:
                     schedule = Schedule(
                         account_id=current_user.id,
                         date=datetime.combine(schedule_date, datetime.min.time()),
-                        schedule_type="daily",
+                        schedule_type=schedule_type,
                         optimization_score=sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items),
                         optimization_context={
                             "energy": energy,
                             "stress": stress,
                             "work_hours": {"start": work_start, "end": work_end},
-                            "auto_scheduled": True
+                            "auto_scheduled": True,
+                            "days_ahead": 7  # Store that this covers a week
                         }
                     )
                     db.add(schedule)
@@ -563,7 +625,15 @@ def update_task(
                     db.refresh(schedule)
                 else:
                     # Update existing schedule
+                    schedule.schedule_type = schedule_type  # Update type if changed
                     schedule.optimization_score = sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items)
+                    schedule.optimization_context = {
+                        "energy": energy,
+                        "stress": stress,
+                        "work_hours": {"start": work_start, "end": work_end},
+                        "auto_scheduled": True,
+                        "days_ahead": 7
+                    }
                     db.commit()
                 
                 # Clear old schedule items for this schedule to prevent duplicates
