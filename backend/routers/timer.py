@@ -9,7 +9,7 @@ from datetime import datetime
 from backend.database import get_db
 from backend.db_models import Account, TimerSession, Task, SystemLog
 from backend.auth import get_current_user
-from backend.models import TimerStartRequest, TimerUpdateRequest, TimerResponse
+from backend.models import TimerStartRequest, TimerResponse
 
 router = APIRouter()
 
@@ -39,11 +39,9 @@ def start_timer(
     
     # Create new timer session
     started_at = datetime.utcnow()
-    print(f"[TIMER] Creating timer with duration_seconds={request.duration_seconds}, name={request.name}, started_at={started_at.isoformat()}")
     timer = TimerSession(
         account_id=current_user.id,
         task_id=request.task_id,
-        name=request.name,
         duration_seconds=request.duration_seconds,
         status="active",
         started_at=started_at
@@ -68,8 +66,7 @@ def start_timer(
     db.add(log)
     db.commit()
     
-    print(f"[TIMER] Created timer {timer.id}: duration={timer.duration_seconds}s, started_at={timer.started_at.isoformat()}")
-    print(f"[TIMER] Timer started_at type: {type(timer.started_at)}, value: {timer.started_at}")
+    print(f"[TIMER] Created timer {timer.id}: duration={timer.duration_seconds}s, started_at={timer.started_at}")
     
     return timer
 
@@ -194,31 +191,6 @@ def get_active_timers(
     ).order_by(TimerSession.started_at.desc()).all()
     
     return timers
-
-@router.put("/{timer_id}", response_model=TimerResponse)
-def update_timer(
-    timer_id: int,
-    request: TimerUpdateRequest,
-    current_user: Account = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Update a timer (e.g., change name)."""
-    timer = db.query(TimerSession).filter(
-        TimerSession.id == timer_id,
-        TimerSession.account_id == current_user.id
-    ).first()
-    
-    if not timer:
-        raise HTTPException(status_code=404, detail="Timer not found")
-    
-    # Update name if provided
-    if request.name is not None:
-        timer.name = request.name
-    
-    db.commit()
-    db.refresh(timer)
-    
-    return timer
 
 @router.get("/", response_model=List[TimerResponse])
 def get_timer_history(

@@ -9,6 +9,7 @@ import TimerView from './components/TimerView';
 import AnalyticsView from './components/AnalyticsView';
 import AdminView from './components/AdminView';
 import LoadingSpinner from './components/LoadingSpinner';
+import NotificationCenter from './components/NotificationCenter';
 
 function App() {
   const [activeTab, setActiveTab] = useState('tasks');
@@ -163,13 +164,20 @@ function App() {
       <main className={`flex-1 overflow-auto relative theme-transition ${
         isDark ? 'bg-black' : 'bg-slate-50'
       }`}>
+        {/* Notification Center - Top Right */}
+        <div className="fixed top-4 right-4 z-50 pointer-events-none">
+          <div className="pointer-events-auto">
+            <NotificationCenter />
+          </div>
+        </div>
+
         <div className={`absolute inset-0 pointer-events-none ${
           isDark 
             ? 'bg-gradient-to-br from-purple-950/10 via-transparent to-pink-950/10' 
             : 'bg-gradient-to-br from-emerald-50/30 via-transparent to-violet-50/30'
         }`} />
         
-        <div className="max-w-7xl mx-auto min-h-full relative z-10 p-6">
+        <div className="max-w-7xl mx-auto min-h-full relative z-10 p-6 pr-28">
           {renderTab()}
         </div>
       </main>

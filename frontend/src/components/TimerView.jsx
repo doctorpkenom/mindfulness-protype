@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Check, Clock, Edit2, Pause, Play, Plus, Square, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useNotifications } from '../contexts/NotificationContext';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -28,15 +29,26 @@ export default function TimerView() {
       const timer = activeTimers.find(t => t.id === timerId);
       await axios.post(`${API_BASE_URL}/api/timer/${timerId}/stop`);
       await loadActiveTimers();
-      // Show notification or alert
+      // Show notification instead of alert
       if (timer) {
         const task = timer.task_id ? tasks.find(t => t.id === timer.task_id) : null;
         const timerDisplayName = timer.name || (task ? task.title : 'Timer');
-        const message = `Timer "${timerDisplayName}" completed!`;
-        alert(message);
+        
+        addNotification({
+          type: 'timer',
+          title: 'Timer Completed!',
+          message: `"${timerDisplayName}" has finished.`,
+          persistent: false
+        });
       }
     } catch (error) {
       console.error('Failed to complete timer:', error);
+      addNotification({
+        type: 'error',
+        title: 'Timer Error',
+        message: 'Failed to complete timer. Please try again.',
+        persistent: false
+      });
     }
   };
 
@@ -221,7 +233,12 @@ export default function TimerView() {
       }
       
       if (!durationSeconds || durationSeconds <= 0) {
-        alert('Please set a valid duration (at least 1 second)');
+        addNotification({
+          type: 'warning',
+          title: 'Invalid Duration',
+          message: 'Please set a valid duration (at least 1 second)',
+          persistent: false
+        });
         return;
       }
       
@@ -245,7 +262,12 @@ export default function TimerView() {
       // Verify the backend received the correct duration
       if (response.data.duration_seconds !== durationSeconds) {
         console.error(`Duration mismatch! Sent: ${durationSeconds}, Received: ${response.data.duration_seconds}`);
-        alert(`Warning: Timer duration mismatch. Expected ${durationSeconds}s but got ${response.data.duration_seconds}s`);
+        addNotification({
+          type: 'warning',
+          title: 'Timer Duration Mismatch',
+          message: `Expected ${durationSeconds}s but got ${response.data.duration_seconds}s`,
+          persistent: false
+        });
       }
       
       // Small delay to ensure backend has saved the timer
@@ -285,7 +307,12 @@ export default function TimerView() {
     } catch (error) {
       console.error('Failed to start timer:', error);
       console.error('Error details:', error.response?.data);
-      alert(error.response?.data?.detail || 'Failed to start timer');
+      addNotification({
+        type: 'error',
+        title: 'Failed to Start Timer',
+        message: error.response?.data?.detail || 'Failed to start timer',
+        persistent: false
+      });
     }
   };
 
@@ -295,7 +322,12 @@ export default function TimerView() {
       await loadActiveTimers();
     } catch (error) {
       console.error('Failed to pause timer:', error);
-      alert(error.response?.data?.detail || 'Failed to pause timer');
+      addNotification({
+        type: 'error',
+        title: 'Failed to Pause Timer',
+        message: error.response?.data?.detail || 'Failed to pause timer',
+        persistent: false
+      });
     }
   };
 
@@ -305,7 +337,12 @@ export default function TimerView() {
       await loadActiveTimers();
     } catch (error) {
       console.error('Failed to resume timer:', error);
-      alert(error.response?.data?.detail || 'Failed to resume timer');
+      addNotification({
+        type: 'error',
+        title: 'Failed to Resume Timer',
+        message: error.response?.data?.detail || 'Failed to resume timer',
+        persistent: false
+      });
     }
   };
 
@@ -320,7 +357,12 @@ export default function TimerView() {
       });
     } catch (error) {
       console.error('Failed to stop timer:', error);
-      alert(error.response?.data?.detail || 'Failed to stop timer');
+      addNotification({
+        type: 'error',
+        title: 'Failed to Stop Timer',
+        message: error.response?.data?.detail || 'Failed to stop timer',
+        persistent: false
+      });
     }
   };
 
@@ -333,7 +375,12 @@ export default function TimerView() {
       setEditingTimerName(null);
     } catch (error) {
       console.error('Failed to update timer name:', error);
-      alert(error.response?.data?.detail || 'Failed to update timer name');
+      addNotification({
+        type: 'error',
+        title: 'Failed to Update Timer Name',
+        message: error.response?.data?.detail || 'Failed to update timer name',
+        persistent: false
+      });
     }
   };
 
