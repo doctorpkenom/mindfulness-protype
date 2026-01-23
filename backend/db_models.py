@@ -260,6 +260,11 @@ class ScheduleItem(Base):
     task = relationship("Task", back_populates="schedule_items")
     
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    @property
+    def task_title(self):
+        """Get task title from relationship for API response."""
+        return self.task.title if self.task else None
 
 class TimerSession(Base):
     """Timer sessions for task tracking."""

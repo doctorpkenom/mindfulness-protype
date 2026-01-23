@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Check, Clock, Edit2, Plus, Trash2 } from 'lucide-react';
+import { Check, Clock, Edit2, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import DatePicker from './DatePicker';
@@ -13,6 +13,7 @@ export default function TaskDashboard() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [selectedTasks, setSelectedTasks] = useState(new Set());
   
   // Form state (using percentages for sliders)
   const [formData, setFormData] = useState({
@@ -40,7 +41,13 @@ export default function TaskDashboard() {
 
   const loadTasks = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/tasks/`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_BASE_URL}/api/tasks/`,
+        {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        }
+      );
       setTasks(response.data);
     } catch (error) {
       console.error('Failed to load tasks:', error);
@@ -124,13 +131,26 @@ export default function TaskDashboard() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('token');
       const backendData = convertToBackendFormat(formData);
       console.log('Sending task data:', backendData); // Debug
       
       if (editingTask) {
-        await axios.put(`${API_BASE_URL}/api/tasks/${editingTask.id}`, backendData);
+        await axios.put(
+          `${API_BASE_URL}/api/tasks/${editingTask.id}`,
+          backendData,
+          {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          }
+        );
       } else {
-        await axios.post(`${API_BASE_URL}/api/tasks/`, backendData);
+        await axios.post(
+          `${API_BASE_URL}/api/tasks/`,
+          backendData,
+          {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          }
+        );
       }
       await loadTasks();
       resetForm();
@@ -154,14 +174,122 @@ export default function TaskDashboard() {
 
   const handleToggleComplete = async (task) => {
     try {
+      const token = localStorage.getItem('token');
       const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-      await axios.put(`${API_BASE_URL}/api/tasks/${task.id}`, {
-        status: newStatus
-      });
+      await axios.put(
+        `${API_BASE_URL}/api/tasks/${task.id}`,
+        { status: newStatus },
+        {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        }
+      );
       await loadTasks();
+      // Remove from selection if it was selected
+      setSelectedTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(task.id);
+        return newSet;
+      });
     } catch (error) {
       console.error('Failed to toggle task completion:', error);
       alert('Failed to update task status. Please try again.');
+    }
+  };
+
+  // Bulk operations
+  const handleSelectAll = (taskList) => {
+    if (selectedTasks.size === taskList.length && taskList.every(t => selectedTasks.has(t.id))) {
+      // Deselect all
+      setSelectedTasks(new Set());
+    } else {
+      // Select all
+      setSelectedTasks(new Set(taskList.map(t => t.id)));
+    }
+  };
+
+  const handleToggleSelect = (taskId) => {
+    setSelectedTasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleBulkComplete = async () => {
+    if (selectedTasks.size === 0) return;
+    
+    if (!confirm(`Mark ${selectedTasks.size} task(s) as completed?`)) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const promises = Array.from(selectedTasks).map(taskId =>
+        axios.put(
+          `${API_BASE_URL}/api/tasks/${taskId}`,
+          { status: 'completed' },
+          {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          }
+        )
+      );
+      await Promise.all(promises);
+      await loadTasks();
+      setSelectedTasks(new Set());
+    } catch (error) {
+      console.error('Failed to complete tasks:', error);
+      alert('Failed to complete some tasks. Please try again.');
+    }
+  };
+
+  const handleBulkUncomplete = async () => {
+    if (selectedTasks.size === 0) return;
+    
+    if (!confirm(`Mark ${selectedTasks.size} task(s) as pending?`)) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const promises = Array.from(selectedTasks).map(taskId =>
+        axios.put(
+          `${API_BASE_URL}/api/tasks/${taskId}`,
+          { status: 'pending' },
+          {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          }
+        )
+      );
+      await Promise.all(promises);
+      await loadTasks();
+      setSelectedTasks(new Set());
+    } catch (error) {
+      console.error('Failed to uncomplete tasks:', error);
+      alert('Failed to update some tasks. Please try again.');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTasks.size === 0) return;
+    
+    if (!confirm(`Delete ${selectedTasks.size} task(s)? This cannot be undone.`)) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const promises = Array.from(selectedTasks).map(taskId =>
+        axios.delete(
+          `${API_BASE_URL}/api/tasks/${taskId}`,
+          {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          }
+        )
+      );
+      await Promise.all(promises);
+      await loadTasks();
+      setSelectedTasks(new Set());
+    } catch (error) {
+      console.error('Failed to delete tasks:', error);
+      alert('Failed to delete some tasks. Please try again.');
     }
   };
 
@@ -698,11 +826,57 @@ export default function TaskDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pending Tasks */}
         <div>
-          <h2 className={`text-xl font-semibold mb-4 ${
-            isDark ? 'text-white' : 'text-slate-900'
-          }`}>
-            Pending ({pendingTasks.length})
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className={`text-xl font-semibold ${
+              isDark ? 'text-white' : 'text-slate-900'
+            }`}>
+              Pending ({pendingTasks.length})
+            </h2>
+            {pendingTasks.length > 0 && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleSelectAll(pendingTasks)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors ${
+                    isDark
+                      ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
+                      : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Select All"
+                >
+                  {selectedTasks.size === pendingTasks.length && pendingTasks.every(t => selectedTasks.has(t.id)) ? (
+                    <CheckSquare size={18} />
+                  ) : (
+                    <Square size={18} />
+                  )}
+                  <span className="text-sm font-medium">Select All</span>
+                </button>
+                {selectedTasks.size > 0 && pendingTasks.some(t => selectedTasks.has(t.id)) && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleBulkComplete}
+                      className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${
+                        isDark
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                      }`}
+                    >
+                      Complete ({Array.from(selectedTasks).filter(id => pendingTasks.some(t => t.id === id)).length})
+                    </button>
+                    <button
+                      onClick={handleBulkDelete}
+                      className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${
+                        isDark
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                          : 'bg-rose-500 hover:bg-rose-600 text-white'
+                      }`}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <div className="space-y-3">
             {pendingTasks.length === 0 ? (
               <p className={`text-sm ${
@@ -715,6 +889,8 @@ export default function TaskDashboard() {
                 <TaskCard
                   key={task.id}
                   task={task}
+                  isSelected={selectedTasks.has(task.id)}
+                  onSelect={() => handleToggleSelect(task.id)}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onToggleComplete={handleToggleComplete}
@@ -728,11 +904,57 @@ export default function TaskDashboard() {
 
         {/* Completed Tasks */}
         <div>
-          <h2 className={`text-xl font-semibold mb-4 ${
-            isDark ? 'text-white' : 'text-slate-900'
-          }`}>
-            Completed ({completedTasks.length})
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className={`text-xl font-semibold ${
+              isDark ? 'text-white' : 'text-slate-900'
+            }`}>
+              Completed ({completedTasks.length})
+            </h2>
+            {completedTasks.length > 0 && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleSelectAll(completedTasks)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors ${
+                    isDark
+                      ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white'
+                      : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                  }`}
+                  title="Select All"
+                >
+                  {selectedTasks.size === completedTasks.length && completedTasks.every(t => selectedTasks.has(t.id)) ? (
+                    <CheckSquare size={18} />
+                  ) : (
+                    <Square size={18} />
+                  )}
+                  <span className="text-sm font-medium">Select All</span>
+                </button>
+                {selectedTasks.size > 0 && completedTasks.some(t => selectedTasks.has(t.id)) && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleBulkUncomplete}
+                      className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${
+                        isDark
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      }`}
+                    >
+                      Uncomplete ({Array.from(selectedTasks).filter(id => completedTasks.some(t => t.id === id)).length})
+                    </button>
+                    <button
+                      onClick={handleBulkDelete}
+                      className={`px-3 py-1.5 text-sm rounded font-medium transition-colors ${
+                        isDark
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                          : 'bg-rose-500 hover:bg-rose-600 text-white'
+                      }`}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <div className="space-y-3">
             {completedTasks.length === 0 ? (
               <p className={`text-sm ${
@@ -745,6 +967,8 @@ export default function TaskDashboard() {
                 <TaskCard
                   key={task.id}
                   task={task}
+                  isSelected={selectedTasks.has(task.id)}
+                  onSelect={() => handleToggleSelect(task.id)}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onToggleComplete={handleToggleComplete}
@@ -760,19 +984,20 @@ export default function TaskDashboard() {
   );
 }
 
-function TaskCard({ task, onEdit, onDelete, onToggleComplete, formatTime, isDark }) {
+function TaskCard({ task, isSelected, onSelect, onEdit, onDelete, onToggleComplete, formatTime, isDark }) {
   const isCompleted = task.status === 'completed';
   
   return (
     <div className={`rounded-lg p-4 border ${
       isDark ? 'bg-neutral-950 border-neutral-800' : 'bg-white border-slate-200'
-    } ${isCompleted ? 'opacity-75' : ''}`}>
+    } ${isCompleted ? 'opacity-75' : ''} ${isSelected ? (isDark ? 'ring-2 ring-purple-500 border-purple-500' : 'ring-2 ring-emerald-500 border-emerald-500') : ''}`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-start gap-3 flex-1">
+          {/* Selection Checkbox */}
           <button
-            onClick={() => onToggleComplete(task)}
+            onClick={onSelect}
             className={`mt-1 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-              isCompleted
+              isSelected
                 ? isDark
                   ? 'bg-purple-600 border-purple-600'
                   : 'bg-emerald-600 border-emerald-600'
@@ -780,9 +1005,9 @@ function TaskCard({ task, onEdit, onDelete, onToggleComplete, formatTime, isDark
                   ? 'border-neutral-600 hover:border-purple-500'
                   : 'border-slate-300 hover:border-emerald-500'
             }`}
-            aria-label={isCompleted ? 'Mark as pending' : 'Mark as completed'}
+            aria-label={isSelected ? 'Deselect task' : 'Select task'}
           >
-            {isCompleted && (
+            {isSelected && (
               <Check size={14} className="text-white" />
             )}
           </button>

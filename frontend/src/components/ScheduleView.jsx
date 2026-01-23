@@ -13,7 +13,7 @@ export default function ScheduleView() {
   const [schedule, setSchedule] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [workHours, setWorkHours] = useState({ start: '09:00', end: '17:00' });
+  const [workHours, setWorkHours] = useState({ start: '06:00', end: '22:00' });
 
   useEffect(() => {
     loadTasks();
@@ -22,8 +22,20 @@ export default function ScheduleView() {
 
   const loadTasks = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/tasks/?status_filter=pending`);
-      setTasks(response.data);
+      const token = localStorage.getItem('token');
+      // Load all tasks (no filter) so we can optimize both pending and scheduled tasks
+      // The backend will filter to only use pending/scheduled tasks when optimizing
+      const response = await axios.get(
+        `${API_BASE_URL}/api/tasks/`,
+        {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        }
+      );
+      // Filter to only show tasks that can be scheduled (pending or scheduled)
+      const schedulableTasks = response.data.filter(
+        task => task.status === 'pending' || task.status === 'scheduled'
+      );
+      setTasks(schedulableTasks);
     } catch (error) {
       console.error('Failed to load tasks:', error);
     }
@@ -31,7 +43,13 @@ export default function ScheduleView() {
 
   const loadSchedule = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/schedule/${selectedDate}`);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_BASE_URL}/api/schedule/${selectedDate}`,
+        {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        }
+      );
       setSchedule(response.data);
     } catch (error) {
       if (error.response?.status !== 404) {
@@ -41,25 +59,72 @@ export default function ScheduleView() {
   };
 
   const handleOptimize = async () => {
-    if (tasks.length === 0) {
-      alert('Please create some tasks first!');
+    // Get all tasks that can be scheduled (pending or scheduled)
+    const schedulableTasks = tasks.filter(
+      task => task.status === 'pending' || task.status === 'scheduled'
+    );
+
+    if (schedulableTasks.length === 0) {
+      alert('No tasks available to schedule. Please create some tasks first, or check that you have pending or scheduled tasks.');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/schedule/optimize`, {
-        date: selectedDate,
-        task_ids: tasks.map(t => t.id),
-        work_hours_start: workHours.start,
-        work_hours_end: workHours.end
-      });
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+
+      const response = await axios.post(
+        `${API_BASE_URL}/api/schedule/optimize`,
+        {
+          date: selectedDate,
+          task_ids: schedulableTasks.map(t => t.id),
+          work_hours_start: workHours.start,
+          work_hours_end: workHours.end
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
       setSchedule(response.data);
       await loadTasks();
       await loadSchedule();
     } catch (error) {
       console.error('Failed to optimize schedule:', error);
-      const errorMsg = error.response?.data?.detail || error.message || 'Failed to optimize schedule. Please try again.';
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        code: error.code,
+        stack: error.stack
+      });
+      
+      let errorMsg = 'Failed to optimize schedule. Please try again.';
+      
+      // Check for network errors first
+      if (!error.response) {
+        if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+          errorMsg = 'Cannot connect to server. Please make sure the backend is running on port 8000.';
+        } else if (error.message) {
+          errorMsg = `Network error: ${error.message}`;
+        } else {
+          errorMsg = 'Network error: Could not reach the server. Please check if the backend is running.';
+        }
+      } else if (error.response?.data?.detail) {
+        errorMsg = error.response.data.detail;
+      } else if (error.response?.status === 500) {
+        errorMsg = 'Server error occurred. Please check the backend logs for details.';
+      } else if (error.response?.status === 401) {
+        errorMsg = 'Authentication failed. Please log in again.';
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+      
       alert(errorMsg);
     } finally {
       setLoading(false);
@@ -143,7 +208,7 @@ export default function ScheduleView() {
         </div>
         <button
           onClick={handleOptimize}
-          disabled={loading || tasks.length === 0}
+          disabled={loading || tasks.filter(t => t.status === 'pending' || t.status === 'scheduled').length === 0}
           className={`w-full py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
             isDark
               ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-lg shadow-purple-500/30'

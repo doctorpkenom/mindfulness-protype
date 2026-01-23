@@ -132,15 +132,15 @@ class TaskResponse(BaseModel):
 class ScheduleOptimizeRequest(BaseModel):
     date: str  # ISO date string
     task_ids: List[int]  # Tasks to schedule
-    work_hours_start: str = "09:00"  # HH:MM
-    work_hours_end: str = "17:00"  # HH:MM
+    work_hours_start: str = "06:00"  # HH:MM - full day schedule
+    work_hours_end: str = "22:00"  # HH:MM - full day schedule
     current_energy: Optional[float] = None
     current_stress: Optional[float] = None
 
 class ScheduleItemResponse(BaseModel):
     id: int
     task_id: int
-    task_title: str
+    task_title: str  # Required field - will be populated from task relationship
     start_time: datetime
     end_time: datetime
     placement_reason: Optional[str]
