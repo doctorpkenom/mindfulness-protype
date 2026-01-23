@@ -15,6 +15,7 @@ export default function TestingTab() {
   const [simDataDays, setSimDataDays] = useState(30);
   const [simDataDaysInput, setSimDataDaysInput] = useState('30');
   const [isGeneratingSimData, setIsGeneratingSimData] = useState(false);
+  const [isDeletingSimData, setIsDeletingSimData] = useState(false);
 
   // Daily tasks (chores, cooking) - with daily recurrence and preferred times
   const dailyTasks = [
@@ -453,6 +454,43 @@ export default function TestingTab() {
     }
   };
 
+  const deleteSimulatedData = async () => {
+    if (!window.confirm('Are you sure you want to delete all simulated user data? This action cannot be undone.')) {
+      return;
+    }
+    
+    if (isDeletingSimData) return;
+    
+    setIsDeletingSimData(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.delete(
+        `${API_BASE_URL}/api/admin/delete-simulated-data`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      addNotification({
+        type: 'success',
+        title: 'Simulated Data Deleted',
+        message: `Deleted all simulated data: ${response.data.deleted.tasks} tasks, ${response.data.deleted.timer_sessions} timers, ${response.data.deleted.schedules} schedules`,
+        persistent: false
+      });
+    } catch (error) {
+      console.error('Failed to delete simulated data:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.detail || 'Failed to delete simulated data',
+        persistent: true
+      });
+    } finally {
+      setIsDeletingSimData(false);
+    }
+  };
+
   const TaskGeneratorCard = ({ type, title, description, icon: Icon, tasks, color }) => (
     <div className={`p-6 rounded-lg border ${
       isDark ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-slate-200'
@@ -784,6 +822,32 @@ export default function TestingTab() {
                   <>
                     <Database size={18} />
                     <span>Generate {simDataDays} Days of Simulated Data</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={deleteSimulatedData}
+                disabled={isDeletingSimData}
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
+                  isDeletingSimData
+                    ? isDark
+                      ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : isDark
+                    ? 'bg-red-900/30 border border-red-800 hover:bg-red-900/50 text-red-400 hover:text-red-300'
+                    : 'bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 hover:text-red-700'
+                }`}
+              >
+                {isDeletingSimData ? (
+                  <>
+                    <Loader className="animate-spin" size={18} />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw size={18} />
+                    <span>Delete All Simulated Data</span>
                   </>
                 )}
               </button>

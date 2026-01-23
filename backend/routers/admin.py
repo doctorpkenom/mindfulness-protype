@@ -192,6 +192,20 @@ def generate_simulated_data(
             priority = random.randint(1, 5)
             difficulty = max(1, min(5, template["difficulty"] + random.randint(-1, 1)))
             
+            # Create task with realistic time-of-day scheduling
+            # Determine appropriate completion time based on task type
+            completion_hour = random.randint(9, 17)  # Default work hours
+            if "morning" in template["title"].lower() or "breakfast" in template["title"].lower():
+                completion_hour = random.randint(6, 10)  # Morning tasks
+            elif "lunch" in template["title"].lower():
+                completion_hour = random.randint(11, 14)  # Lunch time
+            elif "dinner" in template["title"].lower() or "cook" in template["title"].lower() or "evening" in template["title"].lower():
+                completion_hour = random.randint(17, 21)  # Evening tasks
+            elif template["category"] == "work":
+                completion_hour = random.randint(9, 17)  # Work hours
+            elif template["category"] in ["personal", "health"]:
+                completion_hour = random.choice([random.randint(6, 9), random.randint(17, 21)])  # Morning or evening
+            
             # Create task
             task = Task(
                 account_id=account.id,
@@ -203,9 +217,9 @@ def generate_simulated_data(
                 energy_required=template["energy"] + random.uniform(-0.1, 0.1),
                 focus_required=0.5 + random.uniform(-0.2, 0.2),
                 category=template["category"],
-                tags=["simulated", "training"],
+                tags=["simulated", "training"],  # Tagged for identification and ML training
                 status="completed",
-                completed_at=day_date + timedelta(hours=random.randint(9, 17), minutes=random.randint(0, 59))
+                completed_at=day_date + timedelta(hours=completion_hour, minutes=random.randint(0, 59))
             )
             db.add(task)
             db.flush()  # Get task ID
@@ -270,3 +284,106 @@ def generate_simulated_data(
         "days": days,
         "generated": generated_count
     }
+
+@router.delete("/delete-simulated-data")
+def delete_simulated_data(
+    current_user: Account = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Delete all simulated user data (tasks, timers, schedules with 'simulated' or 'training' tags)."""
+    try:
+        # Get current user's account
+        account = db.query(DBAccount).filter(DBAccount.id == current_user.id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+        
+        deleted_count = {
+            "tasks": 0,
+            "timer_sessions": 0,
+            "schedules": 0,
+            "schedule_items": 0
+        }
+        
+        # Delete tasks with simulated/training tags
+        # JSON column query - check if tags array contains "simulated" or "training"
+        from sqlalchemy import or_
+        simulated_tasks = db.query(Task).filter(
+            Task.account_id == account.id,
+            or_(
+                Task.tags.contains("simulated"),
+                Task.tags.contains("training")
+            )
+        ).all()
+        
+        task_ids = [task.id for task in simulated_tasks]
+        deleted_count["tasks"] = len(task_ids)
+        
+        # Delete timer sessions for simulated tasks
+        if task_ids:
+            timer_sessions = db.query(TimerSession).filter(
+                TimerSession.account_id == account.id,
+                TimerSession.task_id.in_(task_ids)
+            ).all()
+            deleted_count["timer_sessions"] = len(timer_sessions)
+            for timer in timer_sessions:
+                db.delete(timer)
+        
+        # Delete schedules that reference simulated tasks or have simulated context
+        schedules_to_delete = []
+        all_schedules = db.query(Schedule).filter(
+            Schedule.account_id == account.id
+        ).all()
+        
+        for schedule in all_schedules:
+            # Check if schedule has simulated tasks
+            schedule_items = db.query(ScheduleItem).filter(
+                ScheduleItem.schedule_id == schedule.id,
+                ScheduleItem.task_id.in_(task_ids) if task_ids else False
+            ).all()
+            
+            # Check if schedule context indicates it's simulated
+            is_simulated = (
+                schedule.optimization_context and 
+                isinstance(schedule.optimization_context, dict) and
+                schedule.optimization_context.get("simulated") == True
+            )
+            
+            if schedule_items or is_simulated:
+                schedules_to_delete.append(schedule.id)
+                # Delete schedule items
+                deleted_count["schedule_items"] += len(schedule_items)
+                for item in schedule_items:
+                    db.delete(item)
+        
+        deleted_count["schedules"] = len(schedules_to_delete)
+        for schedule_id in schedules_to_delete:
+            schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+            if schedule:
+                db.delete(schedule)
+        
+        # Delete the simulated tasks
+        for task in simulated_tasks:
+            db.delete(task)
+        
+        db.commit()
+        
+        # Log deletion
+        log = SystemLog(
+            level="INFO",
+            component="admin",
+            message=f"Deleted all simulated data for user {account.username}",
+            context_data={
+                "deleted_by": current_user.id,
+                "counts": deleted_count
+            }
+        )
+        db.add(log)
+        db.commit()
+        
+        return {
+            "message": "All simulated data deleted successfully",
+            "deleted": deleted_count
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete simulated data: {str(e)}")

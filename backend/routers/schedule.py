@@ -195,32 +195,45 @@ def optimize_schedule_with_ml(
         try:
             # Create context for ML evaluation
             # Get historical timer data for better estimates - enhanced with user patterns
+            # INCLUDES SIMULATED DATA for ML training (tagged with "simulated" or "training")
             timer_history = {}
             user_time_patterns = {}  # task_id -> list of actual durations
             if account_id and db:
                 from backend.db_models import TimerSession
                 # Get recent timer sessions for this user to learn from actual times
+                # Include both real and simulated data (simulated data helps train ML models)
                 recent_timers = db.query(TimerSession).filter(
                     TimerSession.account_id == account_id,
                     TimerSession.status == "completed",
                     TimerSession.actual_seconds.isnot(None)
-                ).order_by(TimerSession.completed_at.desc()).limit(100).all()  # Increased limit for better data
+                ).order_by(TimerSession.completed_at.desc()).limit(200).all()  # Increased limit to include more simulated data
                 
                 # Build a map of task patterns -> actual durations
                 for timer in recent_timers:
                     if timer.task_id:
                         task = db.query(Task).filter(Task.id == timer.task_id).first()
                         if task:
+                            # Include simulated data (tagged with "simulated" or "training")
+                            # This helps ML models learn patterns even with limited real data
+                            task_tags = task.tags or []
+                            is_simulated = "simulated" in task_tags or "training" in task_tags
+                            
                             # Pattern-based history (category + difficulty)
+                            # Weight simulated data slightly less (0.8x) but still use it
                             key = f"{task.category or 'general'}_{task.difficulty}"
                             if key not in timer_history:
                                 timer_history[key] = []
-                            timer_history[key].append(timer.actual_seconds / 60)  # Convert to minutes
+                            duration = timer.actual_seconds / 60
+                            if is_simulated:
+                                # Simulated data gets slightly reduced weight but still valuable
+                                duration = duration * 0.9  # 10% reduction for simulated data
+                            timer_history[key].append(duration)
                             
                             # Task-specific history (for exact task matches)
+                            # Use simulated data here too for better pattern recognition
                             if timer.task_id not in user_time_patterns:
                                 user_time_patterns[timer.task_id] = []
-                            user_time_patterns[timer.task_id].append(timer.actual_seconds / 60)
+                            user_time_patterns[timer.task_id].append(duration)
             
             # Make timer data available for ML scoring
             ml_timer_history = timer_history
