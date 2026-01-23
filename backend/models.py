@@ -136,6 +136,7 @@ class ScheduleOptimizeRequest(BaseModel):
     work_hours_end: str = "22:00"  # HH:MM - full day schedule
     current_energy: Optional[float] = None
     current_stress: Optional[float] = None
+    days_ahead: int = 7  # Number of days to schedule ahead (default 7 for week view)
 
 class ScheduleItemResponse(BaseModel):
     id: int

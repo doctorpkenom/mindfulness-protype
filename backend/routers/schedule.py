@@ -19,6 +19,45 @@ from backend.models import ScheduleOptimizeRequest, ScheduleResponse, ScheduleIt
 
 router = APIRouter()
 
+def can_split_task(task: Task) -> bool:
+    """
+    Determine if a task can be split into multiple time slots.
+    Tasks that can be split: long tasks (>2 hours), non-urgent, not meetings/deadlines.
+    """
+    # Don't split if task is too short
+    if task.estimated_minutes < 120:  # Less than 2 hours
+        return False
+    
+    # Don't split urgent tasks or tasks with deadlines
+    if task.priority >= 5 or task.deadline:
+        return False
+    
+    # Don't split tasks with specific tags that indicate they shouldn't be split
+    tags = task.tags or []
+    non_splittable_tags = ["meeting", "deadline", "urgent", "one-shot", "continuous"]
+    if any(tag in non_splittable_tags for tag in tags):
+        return False
+    
+    # Can split if it's a long task that's not urgent
+    return True
+
+def get_optimal_chunk_size(task: Task) -> int:
+    """
+    Get optimal chunk size for splitting a task (in minutes).
+    Prefers 60-90 minute chunks for focus, but adapts to task characteristics.
+    """
+    total_minutes = task.estimated_minutes
+    
+    # For very long tasks (>4 hours), use 90-minute chunks
+    if total_minutes > 240:
+        return 90
+    # For medium-long tasks (2-4 hours), use 60-minute chunks
+    elif total_minutes > 120:
+        return 60
+    # For tasks just over 2 hours, try 45-minute chunks
+    else:
+        return 45
+
 def optimize_schedule_with_ml(
     tasks: List[Task],
     work_start: str,
@@ -27,12 +66,17 @@ def optimize_schedule_with_ml(
     current_energy: float = 0.7,
     current_stress: float = 0.3,
     account_id: int = None,
-    db: Session = None
+    db: Session = None,
+    days_ahead: int = 1
 ) -> List[dict]:
     """
     Use ML ensemble to optimize task scheduling with personalized weights.
     Enhanced with research-backed insights from productivity literature.
+    Supports multi-day scheduling and task splitting.
     Returns list of scheduled tasks with start/end times and reasoning.
+    
+    Args:
+        days_ahead: Number of days to schedule ahead (default 1 for single day, 7 for week)
     """
     # Load research data for enhanced ML scoring
     research_metadata = None
@@ -73,57 +117,144 @@ def optimize_schedule_with_ml(
     start_hour, start_min = map(int, work_start.split(":"))
     end_hour, end_min = map(int, work_end.split(":"))
     
-    # Create schedule items using the schedule date (not today)
+    # Create schedule items for multiple days
     scheduled_items = []
     schedule_date_only = schedule_date.date() if isinstance(schedule_date, datetime) else schedule_date
     if isinstance(schedule_date_only, datetime):
         schedule_date_only = schedule_date_only.date()
     
-    current_time = datetime.combine(schedule_date_only, datetime.min.time()).replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
-    end_time = datetime.combine(schedule_date_only, datetime.min.time()).replace(hour=end_hour, minute=end_min, second=0, microsecond=0)
+    # Create day slots for multi-day scheduling
+    day_slots = []
+    for day_offset in range(days_ahead):
+        day_date = schedule_date_only + timedelta(days=day_offset)
+        day_start = datetime.combine(day_date, datetime.min.time()).replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
+        day_end = datetime.combine(day_date, datetime.min.time()).replace(hour=end_hour, minute=end_min, second=0, microsecond=0)
+        day_slots.append({
+            "date": day_date,
+            "start": day_start,
+            "end": day_end,
+            "current_time": day_start,
+            "energy": current_energy if day_offset == 0 else 0.8,  # Reset energy each day
+            "stress": current_stress if day_offset == 0 else 0.2  # Reset stress each day
+        })
     
-    # Use ML to score and rank tasks
+    # Use first day's start time for initial ML scoring (will be refined during actual scheduling)
+    initial_time = day_slots[0]["start"] if day_slots else datetime.now()
+    end_time = day_slots[-1]["end"] if day_slots else datetime.now()  # Overall end time
+    
+    # Use ML to score and rank tasks (batch scoring for efficiency)
     task_scores = {}
     if coordinator:
         try:
             # Create context for ML evaluation
-            ml_context = {
-                "energy": "high" if current_energy > 0.7 else "medium" if current_energy > 0.4 else "low",
-                "stress": "high" if current_stress > 0.6 else "medium" if current_stress > 0.3 else "low",
-                "time_of_day": current_time.hour,
-                "hour": current_time.hour
-            }
-            
-            # Score each task using ML models enhanced with research insights
-            for task in tasks:
-                # Create a task "strategy" for ML evaluation
-                task_strategy = {
-                    "name": f"task_{task.id}",
-                    "difficulty": "High" if task.difficulty >= 4 else "Medium" if task.difficulty >= 3 else "Low",
-                    "tags": task.tags or [],
-                    "category": task.category or "general"
-                }
+            # Get historical timer data for better estimates
+            timer_history = {}
+            if account_id and db:
+                from backend.db_models import TimerSession
+                # Get recent timer sessions for this user to learn from actual times
+                recent_timers = db.query(TimerSession).filter(
+                    TimerSession.account_id == account_id,
+                    TimerSession.status == "completed",
+                    TimerSession.actual_seconds.isnot(None)
+                ).order_by(TimerSession.completed_at.desc()).limit(50).all()
                 
-                # Get ML score by evaluating task characteristics
+                # Build a map of task patterns -> actual durations
+                for timer in recent_timers:
+                    if timer.task_id:
+                        task = db.query(Task).filter(Task.id == timer.task_id).first()
+                        if task:
+                            key = f"{task.category}_{task.difficulty}"
+                            if key not in timer_history:
+                                timer_history[key] = []
+                            timer_history[key].append(timer.actual_seconds / 60)  # Convert to minutes
+            
+            # Batch process tasks for ML scoring (more efficient)
+            task_strategies = []
+            for task in tasks:
+                # Build comprehensive task strategy with all relevant attributes
+                task_tags = task.tags or []
+                task_strategies.append({
+                    "name": f"task_{task.id}",
+                    "difficulty": "Very High" if task.difficulty >= 5 else "High" if task.difficulty >= 4 else "Medium" if task.difficulty >= 3 else "Low",
+                    "tags": task_tags,
+                    "category": task.category or "general",
+                    "priority": task.priority,
+                    "energy_required": task.energy_required,
+                    "focus_required": task.focus_required,
+                    "has_deadline": bool(task.deadline),
+                    "is_recurring": bool(task.recurrence_pattern and task.recurrence_pattern != "none")
+                })
+            
+            # Score all tasks in batch for efficiency with robust error handling
+            try:
+                from ml.models.flow_manager import FlowManager
+                from ml.models.stress_predictor import StressPredictor
+                from data_pipeline.preprocessor import DataPreprocessor
+                
+                preprocessor = DataPreprocessor()
+                flow_manager = FlowManager()
+                stress_predictor = StressPredictor()
+                
+                # Use initial time for batch scoring (will be refined per time slot during scheduling)
+                initial_hour = initial_time.hour if hasattr(initial_time, 'hour') else 12
+                
+                # Create context vector for ML models with validation
                 try:
-                    from ml.models.flow_manager import FlowManager
-                    from ml.models.stress_predictor import StressPredictor
-                    from data_pipeline.preprocessor import DataPreprocessor
+                    context_dict = {
+                        "energy": max(0.0, min(1.0, float(current_energy))),
+                        "stress": max(0.0, min(1.0, float(current_stress))),
+                        "time_of_day": max(0, min(23, int(initial_hour)))
+                    }
+                    context_vec = preprocessor.normalize_context(context_dict)
                     
-                    preprocessor = DataPreprocessor()
-                    flow_manager = FlowManager()
-                    stress_predictor = StressPredictor()
+                    # Validate context vector
+                    if context_vec is None or len(context_vec) == 0:
+                        raise ValueError("Empty context vector from preprocessor")
                     
-                    # Create context vector for ML models
-                    context_vec = preprocessor.normalize_context({
-                        "energy": current_energy,
-                        "stress": current_stress,
-                        "time_of_day": current_time.hour
-                    })
+                    # Ensure it's a numpy array or list
+                    if hasattr(context_vec, 'tolist'):
+                        context_vec = context_vec.tolist()
+                    elif not isinstance(context_vec, (list, np.ndarray)):
+                        raise ValueError(f"Invalid context vector type: {type(context_vec)}")
                     
-                    # Get scores from ML models
-                    flow_scores = flow_manager.predict(context_vec, [task_strategy])
-                    stress_scores = stress_predictor.predict(context_vec, [task_strategy])
+                except Exception as ctx_error:
+                    print(f"[WARNING] Context normalization failed: {ctx_error}. Using defaults.")
+                    # Fallback: create a simple context vector [Morning, Afternoon, Evening, Night, Energy, Stress]
+                    import numpy as np
+                    hour = int(initial_hour) if hasattr(initial_hour, '__int__') else 12
+                    time_vec = [0] * 4
+                    if 5 <= hour < 12: time_vec[0] = 1
+                    elif 12 <= hour < 17: time_vec[1] = 1
+                    elif 17 <= hour < 22: time_vec[2] = 1
+                    else: time_vec[3] = 1
+                    context_vec = np.array(time_vec + [max(0.0, min(1.0, float(current_energy))), max(0.0, min(1.0, float(current_stress)))])
+                
+                # Batch predict for all tasks with error handling per model
+                flow_scores = {}
+                stress_scores = {}
+                
+                try:
+                    flow_scores = flow_manager.predict(context_vec, task_strategies)
+                    if not flow_scores or len(flow_scores) == 0:
+                        print("[WARNING] FlowManager returned empty scores, using defaults")
+                        flow_scores = {s["name"]: 0.5 for s in task_strategies}
+                except Exception as flow_error:
+                    print(f"[WARNING] FlowManager prediction failed: {flow_error}. Using defaults.")
+                    flow_scores = {s["name"]: 0.5 for s in task_strategies}
+                
+                try:
+                    stress_scores = stress_predictor.predict(context_vec, task_strategies)
+                    if not stress_scores or len(stress_scores) == 0:
+                        print("[WARNING] StressPredictor returned empty scores, using defaults")
+                        stress_scores = {s["name"]: 0.5 for s in task_strategies}
+                except Exception as stress_error:
+                    print(f"[WARNING] StressPredictor prediction failed: {stress_error}. Using defaults.")
+                    stress_scores = {s["name"]: 0.5 for s in task_strategies}
+                
+                # Process each task's scores
+                for idx, task in enumerate(tasks):
+                    task_strategy = task_strategies[idx]
+                    task_id = task.id
                     
                     flow_score = flow_scores.get(task_strategy["name"], 0.5)
                     stress_score = stress_scores.get(task_strategy["name"], 0.5)
@@ -179,11 +310,68 @@ def optimize_schedule_with_ml(
                             research_boost -= 0.12
                             research_reason.append("Sweller: High cognitive load penalty")
                         
+                        # Rubinstein (2001): Task switching - penalize high-focus tasks when already focused
+                        if task.focus_required and task.focus_required > 0.7:
+                            rubinstein_features = research_metadata.ML_FEATURES.get("rubinstein_2001", {})
+                            # If we're already doing high-focus work, switching is costly
+                            if current_energy < 0.5:  # Low energy = already taxed
+                                research_boost -= 0.08
+                                research_reason.append("Rubinstein: Task switching cost when low energy")
+                        
+                        # Zeigarnik (1927): Unfinished tasks - boost tasks that provide closure
+                        if task.status == "pending" and task.priority >= 4:
+                            zeigarnik_features = research_metadata.ML_FEATURES.get("zeigarnik_1927", {})
+                            research_boost += 0.06
+                            research_reason.append("Zeigarnik: Closure for high-priority pending tasks")
+                        
+                        # Bandura (1977): Self-efficacy - boost tasks that build confidence
+                        if task.difficulty <= 2 and task.category in ["personal", "learning"]:
+                            bandura_features = research_metadata.ML_FEATURES.get("bandura_1977", {})
+                            if bandura_features.get("confidence_building", False):
+                                research_boost += 0.07
+                                research_reason.append("Bandura: Confidence-building task")
+                        
+                        # Kang (2009): Epistemic curiosity - boost learning tasks when energy is medium-high
+                        if task.category == "learning" and 0.4 <= current_energy <= 0.8:
+                            kang_features = research_metadata.ML_FEATURES.get("kang_2009", {})
+                            learning_bonus = kang_features.get("learning_bonus", 0.2)
+                            research_boost += learning_bonus
+                            research_reason.append("Kang: Epistemic curiosity boost")
+                        
                         # Gollwitzer (1999): Implementation intentions - boost tasks with clear deadlines
+                        # Also enforce deadline urgency - tasks closer to deadline get higher priority
                         if task.deadline:
                             gollwitzer_features = research_metadata.ML_FEATURES.get("gollwitzer_1999", {})
                             research_boost += 0.05
                             research_reason.append("Gollwitzer: Clear goal boost")
+                            
+                            # Calculate deadline urgency - boost tasks that are closer to deadline
+                            deadline_urgency = None
+                            if isinstance(task.deadline, datetime):
+                                days_until_deadline = (task.deadline.date() - schedule_date_only).days
+                                if days_until_deadline < 0:
+                                    # Past deadline - very high priority
+                                    deadline_urgency = 0.5
+                                    research_reason.append("URGENT: Past deadline")
+                                elif days_until_deadline == 0:
+                                    # Due today - very high priority
+                                    deadline_urgency = 0.4
+                                    research_reason.append("URGENT: Due today")
+                                elif days_until_deadline <= 1:
+                                    # Due tomorrow - high priority
+                                    deadline_urgency = 0.3
+                                    research_reason.append("URGENT: Due tomorrow")
+                                elif days_until_deadline <= 3:
+                                    # Due soon - moderate priority
+                                    deadline_urgency = 0.2
+                                    research_reason.append("Due in 2-3 days")
+                                elif days_until_deadline <= 7:
+                                    # Due this week - slight priority
+                                    deadline_urgency = 0.1
+                                    research_reason.append("Due this week")
+                                
+                                if deadline_urgency:
+                                    research_boost += deadline_urgency
                     
                     # Combine ML scores with priority and research insights
                     flow_weight = coordinator.expert_weights.get("flow_manager", 1.2)
@@ -195,24 +383,55 @@ def optimize_schedule_with_ml(
                         (task.priority / 5.0) * 0.3
                     ) / (flow_weight + stress_weight + 1.0)  # Normalize
                     
-                    # Apply research boost (capped at reasonable limits)
-                    ml_score = min(1.0, max(0.0, base_ml_score + research_boost))
+                    # Time-of-day preference boost (will be refined during actual scheduling)
+                    time_boost = 0.0
+                    task_tags = task.tags or []
+                    
+                    # Check for time-related tags (general boost, refined per time slot)
+                    if "morning" in task_tags:
+                        time_boost += 0.05  # General boost, will be enhanced if scheduled in morning
+                    elif "afternoon" in task_tags:
+                        time_boost += 0.05
+                    elif "evening" in task_tags:
+                        time_boost += 0.05
+                    
+                    # Use timer history to adjust estimates if available
+                    if timer_history:
+                        task_key = f"{task.category or 'general'}_{task.difficulty}"
+                        if task_key in timer_history:
+                            avg_actual = sum(timer_history[task_key]) / len(timer_history[task_key])
+                            # If actual times are consistently different, adjust score
+                            if task.estimated_minutes:
+                                accuracy_ratio = avg_actual / task.estimated_minutes
+                                if 0.8 <= accuracy_ratio <= 1.2:
+                                    time_boost += 0.05  # Good estimate accuracy
+                                    research_reason.append("Timer data: Good time estimates")
+                                elif accuracy_ratio > 1.5:
+                                    # Task takes longer than estimated - slight penalty
+                                    time_boost -= 0.05
+                                    research_reason.append("Timer data: Task often takes longer")
+                    
+                    # Apply research boost and time boost (capped at reasonable limits)
+                    ml_score = min(1.0, max(0.0, base_ml_score + research_boost + time_boost))
                     
                     # Store research reasoning for later use
-                    task_scores[task.id] = {
+                    task_scores[task_id] = {
                         "score": ml_score,
                         "research_reasons": research_reason,
                         "base_score": base_ml_score,
-                        "research_boost": research_boost
+                        "research_boost": research_boost,
+                        "time_boost": time_boost
                     }
-                except Exception as e:
-                    print(f"[WARNING] ML model scoring failed for task {task.id}: {e}")
-                    # Fallback to priority-based scoring
+            except Exception as e:
+                print(f"[WARNING] Batch ML scoring failed: {e}")
+                # Fallback: score individually with simple priority-based scoring
+                for task in tasks:
                     task_scores[task.id] = {
                         "score": task.priority / 5.0,
                         "research_reasons": [],
                         "base_score": task.priority / 5.0,
-                        "research_boost": 0.0
+                        "research_boost": 0.0,
+                        "time_boost": 0.0
                     }
         except Exception as e:
             print(f"[WARNING] ML scoring failed: {e}. Using fallback scoring.")
@@ -222,125 +441,282 @@ def optimize_schedule_with_ml(
                     "score": task.priority / 5.0,
                     "research_reasons": [],
                     "base_score": task.priority / 5.0,
-                    "research_boost": 0.0
+                    "research_boost": 0.0,
+                    "time_boost": 0.0
                 }
     
-    # Sort tasks using ML scores (with research enhancements) if available, otherwise use priority
-    if task_scores:
-        def get_score(task_id):
+    # Expand recurring tasks into multiple instances for the week
+    expanded_tasks = []
+    for task in tasks:
+        if task.recurrence_pattern and task.recurrence_pattern != "none":
+            # Check if recurrence has ended
+            if task.recurrence_end_date and task.recurrence_end_date.date() < schedule_date_only:
+                continue  # Skip tasks whose recurrence has ended
+            
+            # Expand based on recurrence pattern
+            if task.recurrence_pattern == "daily":
+                # Create instance for each day in the week
+                for day_offset in range(days_ahead):
+                    day_date = schedule_date_only + timedelta(days=day_offset)
+                    # Create a task instance for this day
+                    expanded_tasks.append((task, day_date))
+            elif task.recurrence_pattern == "weekly":
+                # Create instance for the first day of the week (or specific day)
+                expanded_tasks.append((task, schedule_date_only))
+            elif task.recurrence_pattern == "monthly":
+                # Create instance for the first day
+                expanded_tasks.append((task, schedule_date_only))
+            elif task.recurrence_pattern == "custom" and task.custom_recurrence_days:
+                # Create instances based on custom interval
+                day_offset = 0
+                while day_offset < days_ahead:
+                    day_date = schedule_date_only + timedelta(days=day_offset)
+                    expanded_tasks.append((task, day_date))
+                    day_offset += task.custom_recurrence_days
+        else:
+            # Non-recurring task - add once
+            expanded_tasks.append((task, None))
+    
+    # Prepare tasks for scheduling - split tasks that can be split
+    task_chunks = {}  # (task_id, day_date) -> list of chunks (remaining minutes)
+    for task, day_date in expanded_tasks:
+        task_key = (task.id, day_date)
+        if can_split_task(task):
+            chunk_size = get_optimal_chunk_size(task)
+            chunks = []
+            remaining = task.estimated_minutes
+            while remaining > 0:
+                chunk_mins = min(chunk_size, remaining)
+                chunks.append(chunk_mins)
+                remaining -= chunk_mins
+            task_chunks[task_key] = chunks
+        else:
+            task_chunks[task_key] = [task.estimated_minutes]
+    
+    # Sort expanded tasks using ML scores (with research enhancements) if available, otherwise use priority
+    # Also prioritize tasks with deadlines that are approaching
+    def get_task_score(task_tuple):
+        task, day_date = task_tuple
+        task_id = task.id
+        
+        # Base score from ML
+        if task_scores:
             score_data = task_scores.get(task_id)
             if isinstance(score_data, dict):
-                return score_data["score"]
-            return score_data if score_data else 0.0
+                base_score = score_data["score"]
+            else:
+                base_score = score_data if score_data else 0.0
+        else:
+            base_score = task.priority / 5.0
         
-        sorted_tasks = sorted(tasks, key=lambda t: (-get_score(t.id), t.difficulty))
-    else:
-        sorted_tasks = sorted(tasks, key=lambda t: (-t.priority, t.difficulty))
+        # Deadline urgency boost - tasks with deadlines get prioritized
+        deadline_boost = 0.0
+        if task.deadline and isinstance(task.deadline, datetime):
+            days_until_deadline = (task.deadline.date() - schedule_date_only).days
+            if days_until_deadline < 0:
+                deadline_boost = 1000  # Past deadline - very high priority
+            elif days_until_deadline == 0:
+                deadline_boost = 500  # Due today
+            elif days_until_deadline <= 1:
+                deadline_boost = 200  # Due tomorrow
+            elif days_until_deadline <= 3:
+                deadline_boost = 100  # Due soon
+            elif days_until_deadline <= 7:
+                deadline_boost = 50  # Due this week
+        
+        # For recurring tasks, prefer scheduling on their specific day
+        day_boost = 0.0
+        if day_date:
+            # Prefer scheduling recurring tasks on their designated day
+            day_boost = 0.1
+        
+        return -(base_score + deadline_boost + day_boost)  # Negative for descending sort
     
-    # Schedule tasks
-    for task in sorted_tasks:
-        # Initialize research reasons for this task
-        research_reasons = []
+    sorted_expanded_tasks = sorted(expanded_tasks, key=get_task_score)
+    
+    # Track which chunks of which tasks have been scheduled
+    scheduled_chunks = {}  # (task_id, day_date) -> list of scheduled chunk indices
+    
+    # Schedule tasks across multiple days with task splitting
+    for task, day_date in sorted_expanded_tasks:
+        task_key = (task.id, day_date)
+        chunks = task_chunks.get(task_key, [task.estimated_minutes])
+        scheduled_chunks[task_key] = []
         
-        # Create context for placement scoring
-        context = {
-            "stress": current_stress,
-            "energy": current_energy,
-            "time_of_day": current_time.hour,
-            "task_difficulty": task.difficulty / 5.0,
-            "task_energy_required": task.energy_required,
-            "task_focus_required": task.focus_required
-        }
-        
-        # Calculate energy match
-        energy_match = abs(current_energy - task.energy_required)
-        
-        # Enhanced placement score using ML insights and research data
-        score_data = task_scores.get(task.id) if task_scores else None
-        if isinstance(score_data, dict):
-            ml_score = score_data["score"]
-            research_reasons = score_data.get("research_reasons", [])
-        elif score_data is not None:
-            # Handle legacy format (just a number)
-            ml_score = score_data
-            research_reasons = []
+        # Determine which day slots this task can be scheduled on
+        # For recurring tasks with a specific day, only consider that day
+        # For tasks with deadlines, prioritize scheduling before deadline
+        eligible_day_slots = []
+        if day_date:
+            # Recurring task - find the matching day slot
+            for day_idx, day_slot in enumerate(day_slots):
+                if day_slot["date"] == day_date:
+                    eligible_day_slots = [(day_idx, day_slot)]
+                    break
+        elif task.deadline:
+            # Task with deadline - only schedule on days before deadline
+            deadline_date = task.deadline.date() if isinstance(task.deadline, datetime) else task.deadline
+            for day_idx, day_slot in enumerate(day_slots):
+                if day_slot["date"] <= deadline_date:
+                    eligible_day_slots.append((day_idx, day_slot))
         else:
-            ml_score = task.priority / 5.0
-            research_reasons = []
+            # Regular task - can be scheduled on any day
+            eligible_day_slots = [(idx, slot) for idx, slot in enumerate(day_slots)]
         
-        placement_score = (
-            ml_score * 0.4 +  # ML-based priority
-            (1 - energy_match) * 0.3 +  # Energy match
-            (1 - task.difficulty / 5.0) * 0.2 +  # Easier tasks when energy is lower
-            (1 - current_stress) * 0.1  # Lower stress = better placement
-        )
-        
-        # Calculate task duration (use estimated minutes, but consider historical accuracy)
-        estimated_duration = task.estimated_minutes
-        if task.completion_accuracy and task.completion_accuracy > 0:
-            # Adjust based on historical accuracy
-            estimated_duration = int(estimated_duration * task.completion_accuracy)
-        
-        task_duration = timedelta(minutes=estimated_duration)
-        
-        # Check if task fits in remaining time
-        # Be more aggressive: allow tasks to go up to 2 hours past end_time to fit more tasks
-        effective_end_time = end_time + timedelta(hours=2)
-        time_remaining = (end_time - current_time).total_seconds() / 60  # minutes
-        
-        if current_time + task_duration > effective_end_time:
-            # Task is too large even with overflow allowance
-            print(f"[SCHEDULE] Task '{task.title}' ({estimated_duration} min) is too large. Remaining time: {time_remaining:.1f} min")
-            continue
-        
-        # If task goes past normal end_time, note it but schedule anyway
-        goes_past_end = current_time + task_duration > end_time
-        if goes_past_end:
-            overflow_minutes = ((current_time + task_duration) - end_time).total_seconds() / 60
-            base_reason = f"ML Score: {ml_score:.2f}, Priority: {task.priority}, Energy match: {1-energy_match:.2f}, Final Score: {placement_score:.2f} (Extends {overflow_minutes:.0f} min past work hours)"
-            confidence_score = placement_score * 0.85  # Slightly lower score for overflow
-        else:
-            base_reason = f"ML Score: {ml_score:.2f}, Priority: {task.priority}, Energy match: {1-energy_match:.2f}, Final Score: {placement_score:.2f}"
-            confidence_score = placement_score
-        
-        # Add research insights to placement reason
-        if research_reasons:
-            research_note = " | Research: " + ", ".join(research_reasons[:2])  # Limit to 2 reasons
-            placement_reason = base_reason + research_note
-        else:
-            placement_reason = base_reason
-        
-        # Create schedule item
-        item = {
-            "task_id": task.id,
-            "task_title": task.title,
-            "start_time": current_time,
-            "end_time": current_time + task_duration,
-            "placement_reason": placement_reason,
-            "confidence_score": confidence_score
-        }
-        
-        scheduled_items.append(item)
-        
-        # Update energy (tasks drain energy based on their requirements)
-        energy_drain = task.energy_required * 0.15  # More realistic energy drain
-        current_energy = max(0.1, current_energy - energy_drain)
-        
-        # Add break between tasks (shorter breaks to fit more tasks)
-        # Reduce break time if we're running low on time or past end_time
-        time_remaining_after_task = (end_time - (current_time + task_duration)).total_seconds() / 60
-        if goes_past_end or time_remaining_after_task < 30:  # Past end or less than 30 min remaining
-            break_duration = 0  # No break to maximize task fitting
-        elif time_remaining_after_task < 60:  # Less than 1 hour remaining
-            break_duration = 2 if task.energy_required < 0.6 else 3  # Very short breaks
-        else:
-            break_duration = 5 if task.energy_required < 0.6 else 10
-        
-        current_time = current_time + task_duration + timedelta(minutes=break_duration)
-        
-        # Only stop if we're way past the effective end time
-        if current_time >= effective_end_time:
-            break
+        for chunk_idx, chunk_minutes in enumerate(chunks):
+            # Find the best day and time slot for this chunk
+            best_slot = None
+            best_score = -1
+            
+            for day_idx, day_slot in eligible_day_slots:
+                # Check if this day has enough time
+                if day_slot["current_time"] + timedelta(minutes=chunk_minutes) > day_slot["end"] + timedelta(hours=2):
+                    continue
+                
+                # For tasks with deadlines, ensure we schedule before deadline
+                if task.deadline:
+                    deadline_datetime = task.deadline if isinstance(task.deadline, datetime) else datetime.combine(task.deadline, datetime.min.time())
+                    if day_slot["current_time"] > deadline_datetime:
+                        continue  # Skip slots after deadline
+                
+                # Calculate score for this time slot
+                slot_hour = day_slot["current_time"].hour
+                slot_energy = day_slot["energy"]
+                slot_stress = day_slot["stress"]
+                
+                # Get ML score for this time slot
+                score_data = task_scores.get(task.id) if task_scores else None
+                if isinstance(score_data, dict):
+                    base_score = score_data["score"]
+                else:
+                    base_score = task.priority / 5.0 if score_data is None else (score_data if isinstance(score_data, (int, float)) else task.priority / 5.0)
+                
+                # Adjust score based on current day/time slot
+                time_boost = 0.0
+                task_tags = task.tags or []
+                if "morning" in task_tags and 6 <= slot_hour < 12:
+                    time_boost += 0.15
+                elif "afternoon" in task_tags and 12 <= slot_hour < 17:
+                    time_boost += 0.15
+                elif "evening" in task_tags and 17 <= slot_hour < 22:
+                    time_boost += 0.15
+                
+                # Energy match
+                energy_match = abs(slot_energy - task.energy_required)
+                
+                slot_score = (
+                    base_score * 0.4 +
+                    (1 - energy_match) * 0.3 +
+                    (1 - slot_stress) * 0.2 +
+                    time_boost * 0.1
+                )
+                
+                if slot_score > best_score:
+                    best_score = slot_score
+                    best_slot = (day_idx, day_slot)
+            
+            if not best_slot:
+                # Can't fit this chunk anywhere
+                continue
+            
+            day_idx, day_slot = best_slot
+            current_time = day_slot["current_time"]
+            
+            # Calculate task duration
+            estimated_duration = chunk_minutes
+            if task.completion_accuracy and task.completion_accuracy > 0:
+                estimated_duration = int(estimated_duration * task.completion_accuracy)
+            
+            task_duration = timedelta(minutes=estimated_duration)
+            chunk_end = current_time + task_duration
+            
+            # Check if chunk fits (with 2-hour overflow allowance)
+            effective_end = day_slot["end"] + timedelta(hours=2)
+            if chunk_end > effective_end:
+                continue
+            
+            # Create schedule item for this chunk
+            # Use task_key instead of task.id since scheduled_chunks uses (task_id, day_date) as key
+            chunk_num = len(scheduled_chunks.get(task_key, [])) + 1
+            total_chunks = len(chunks)
+            chunk_label = f" (Part {chunk_num}/{total_chunks})" if total_chunks > 1 else ""
+            
+            # For recurring tasks, add day indicator to title
+            if day_date:
+                try:
+                    day_label = day_date.strftime(" (%a %b %d)")
+                    chunk_label = day_label + chunk_label
+                except:
+                    pass  # Skip if date formatting fails
+            
+            score_data = task_scores.get(task.id) if task_scores else None
+            research_reasons = score_data.get("research_reasons", []) if isinstance(score_data, dict) else []
+            
+            # Get base_score for this task (used in reason string)
+            score_data_for_reason = task_scores.get(task.id) if task_scores else None
+            if isinstance(score_data_for_reason, dict):
+                base_score_for_reason = score_data_for_reason["score"]
+            else:
+                base_score_for_reason = task.priority / 5.0
+            
+            goes_past_end = chunk_end > day_slot["end"]
+            if goes_past_end:
+                overflow_minutes = ((chunk_end - day_slot["end"]).total_seconds() / 60)
+                base_reason = f"ML Score: {base_score_for_reason:.2f}, Priority: {task.priority}, Chunk {chunk_num}/{total_chunks} (Extends {overflow_minutes:.0f} min past work hours)"
+                confidence_score = best_score * 0.85
+            else:
+                base_reason = f"ML Score: {base_score_for_reason:.2f}, Priority: {task.priority}, Chunk {chunk_num}/{total_chunks}"
+                confidence_score = best_score
+            
+            if research_reasons:
+                research_note = " | Research: " + ", ".join(research_reasons[:2])
+                placement_reason = base_reason + research_note
+            else:
+                placement_reason = base_reason
+            
+            item = {
+                "task_id": task.id,
+                "task_title": task.title + chunk_label,
+                "start_time": current_time,
+                "end_time": chunk_end,
+                "placement_reason": placement_reason,
+                "confidence_score": confidence_score,
+                "chunk_index": chunk_idx,
+                "total_chunks": total_chunks
+            }
+            
+            scheduled_items.append(item)
+            scheduled_chunks[task_key].append(chunk_idx)
+            
+            # Update day slot
+            energy_drain = task.energy_required * 0.15
+            day_slot["energy"] = max(0.1, day_slot["energy"] - energy_drain)
+            
+            # Calculate break duration based on task characteristics and time remaining
+            time_remaining_after = (day_slot["end"] - chunk_end).total_seconds() / 60
+            hours_worked_today = (current_time - day_slot["start"]).total_seconds() / 3600
+            
+            # Longer breaks after longer tasks or after several hours
+            if goes_past_end or time_remaining_after < 30:
+                break_duration = 0
+            elif hours_worked_today > 6:  # After 6 hours, need longer breaks
+                break_duration = 15 if task.energy_required > 0.7 else 10
+            elif hours_worked_today > 4:  # After 4 hours, moderate breaks
+                break_duration = 10 if task.energy_required > 0.6 else 5
+            elif chunk_minutes > 90:  # Long task chunk
+                break_duration = 10 if task.energy_required > 0.7 else 5
+            elif chunk_minutes > 60:  # Medium task chunk
+                break_duration = 5 if task.energy_required > 0.6 else 3
+            else:  # Short task chunk
+                break_duration = 3 if task.energy_required > 0.5 else 2
+            
+            # Update current time for this day
+            day_slot["current_time"] = chunk_end + timedelta(minutes=break_duration)
+            
+            # Energy recovery during break
+            if break_duration > 0:
+                recovery = min(0.1, break_duration * 0.01)  # Small energy recovery
+                day_slot["energy"] = min(1.0, day_slot["energy"] + recovery)
     
     return scheduled_items
 
@@ -388,27 +764,37 @@ def optimize_schedule(
             current_energy=energy,
             current_stress=stress,
             account_id=current_user.id,
-            db=db
+            db=db,
+            days_ahead=getattr(request, 'days_ahead', 7)  # Default to 7 days (week view)
         )
         
         if not scheduled_items:
-            raise HTTPException(status_code=400, detail="Could not schedule any tasks - not enough time")
+            print(f"[WARNING] No scheduled items created for {len(tasks)} tasks")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Could not schedule any tasks. This might be because tasks are too large for the available time window ({request.work_hours_start} - {request.work_hours_end} for {getattr(request, 'days_ahead', 7)} days). Try adjusting work hours or reducing task durations."
+            )
         
         # Warn if not all tasks were scheduled
         if len(scheduled_items) < len(tasks):
             unscheduled_count = len(tasks) - len(scheduled_items)
             print(f"[WARNING] Only scheduled {len(scheduled_items)}/{len(tasks)} tasks. {unscheduled_count} tasks couldn't fit in the available time window.")
     
+        # Determine schedule type based on days_ahead
+        days_ahead = getattr(request, 'days_ahead', 7)
+        schedule_type = "weekly" if days_ahead > 1 else "daily"
+        
         # Create schedule
         schedule = Schedule(
             account_id=current_user.id,
             date=schedule_date,
-            schedule_type="daily",
-            optimization_score=sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items),
+            schedule_type=schedule_type,
+            optimization_score=sum(item["confidence_score"] for item in scheduled_items) / len(scheduled_items) if scheduled_items else 0.0,
             optimization_context={
                 "energy": energy,
                 "stress": stress,
-                "work_hours": {"start": request.work_hours_start, "end": request.work_hours_end}
+                "work_hours": {"start": request.work_hours_start, "end": request.work_hours_end},
+                "days_ahead": days_ahead
             }
         )
         db.add(schedule)
@@ -430,10 +816,18 @@ def optimize_schedule(
                 )
                 db.add(schedule_item)
                 
-                # Update task status
-                task.status = "scheduled"
-                task.scheduled_start = item_data["start_time"]
-                task.scheduled_end = item_data["end_time"]
+                # Update task status (only set if this is the first chunk or if task isn't already scheduled)
+                # For split tasks, we keep the task as scheduled but don't overwrite times
+                if task.status != "scheduled" or not task.scheduled_start:
+                    task.status = "scheduled"
+                    # Set to first chunk's start time
+                    first_chunk = next((item for item in scheduled_items if item["task_id"] == task.id), None)
+                    if first_chunk:
+                        task.scheduled_start = first_chunk["start_time"]
+                        # Set end time to last chunk's end time
+                        last_chunk = next((item for item in reversed(scheduled_items) if item["task_id"] == task.id), None)
+                        if last_chunk:
+                            task.scheduled_end = last_chunk["end_time"]
         
         db.commit()
         
@@ -513,9 +907,24 @@ def optimize_schedule(
         except:
             pass  # Don't fail if logging fails
         
+        # Provide more helpful error messages based on error type
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        if "context" in error_msg.lower() or "vector" in error_msg.lower() or "index" in error_msg.lower():
+            detail_msg = f"ML data processing error: {error_msg}. The system is using fallback scoring. Please check task data format."
+        elif "predict" in error_msg.lower() or "model" in error_msg.lower() or "coordinator" in error_msg.lower():
+            detail_msg = f"ML model error: {error_msg}. Models are using fallback priority-based scoring."
+        elif "import" in error_msg.lower() or "module" in error_msg.lower():
+            detail_msg = f"ML module import error: {error_msg}. Please check ML model files are present."
+        elif "NoneType" in error_type or "AttributeError" in error_type:
+            detail_msg = f"Data attribute error: {error_msg}. Please check all tasks have required fields."
+        else:
+            detail_msg = f"Schedule optimization error: {error_msg}. Please try again or check backend logs for details."
+        
         raise HTTPException(
             status_code=500,
-            detail=f"Machine learning model failed: {str(e)}"
+            detail=detail_msg
         )
 
 @router.get("/{date}", response_model=ScheduleResponse)
@@ -524,17 +933,19 @@ def get_schedule(
     current_user: Account = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get schedule for a specific date."""
+    """Get schedule for a specific date (returns week view if available)."""
     schedule_date = datetime.fromisoformat(date.replace("Z", "+00:00")).date()
+    week_end = schedule_date + timedelta(days=7)
     
     from sqlalchemy.orm import joinedload
+    # Get schedule that covers this date (could be daily or weekly)
     schedule = db.query(Schedule).options(
         joinedload(Schedule.items).joinedload(ScheduleItem.task)
     ).filter(
         Schedule.account_id == current_user.id,
         Schedule.date >= datetime.combine(schedule_date, datetime.min.time()),
-        Schedule.date < datetime.combine(schedule_date, datetime.min.time()) + timedelta(days=1)
-    ).first()
+        Schedule.date < datetime.combine(week_end, datetime.min.time())
+    ).order_by(Schedule.date.asc()).first()
     
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found for this date")

@@ -16,9 +16,35 @@ class StressPredictor(BaseModel):
             self.weights["strategy_effectiveness"] = {}
         
     def predict(self, context_vector, available_strategies):
-        # context_vector: [Morning, Afternoon, Evening, Night, Energy, Stress]
-        stress_level = context_vector[-1] if len(context_vector) > 0 else 0.5
-        energy_level = context_vector[-2] if len(context_vector) > 1 else 0.5
+        """
+        Predicts stress-appropriate strategies with robust error handling.
+        Enhanced with research-backed Sirois (2014) and Bandura (1977) principles.
+        """
+        # Robust context vector handling
+        try:
+            # Handle numpy arrays, lists, or other iterables
+            if hasattr(context_vector, 'tolist'):
+                ctx_list = context_vector.tolist()
+            elif isinstance(context_vector, (list, tuple)):
+                ctx_list = list(context_vector)
+            else:
+                ctx_list = [0.0, 0.0, 0.0, 0.0, 0.5, 0.5]  # Default fallback
+            
+            # Ensure we have at least 6 elements [Morning, Afternoon, Evening, Night, Energy, Stress]
+            while len(ctx_list) < 6:
+                ctx_list.append(0.5)  # Default to medium
+            
+            stress_level = float(ctx_list[-1]) if len(ctx_list) > 0 else 0.5
+            energy_level = float(ctx_list[-2]) if len(ctx_list) > 1 else 0.5
+            
+            # Clamp to valid range
+            stress_level = max(0.0, min(1.0, stress_level))
+            energy_level = max(0.0, min(1.0, energy_level))
+            
+        except (IndexError, ValueError, TypeError) as e:
+            print(f"[StressPredictor] Context vector error: {e}. Using defaults.")
+            stress_level = 0.5
+            energy_level = 0.5
         
         # Track stress history
         stress_history = self.weights.get("stress_history", [])

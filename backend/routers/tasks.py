@@ -16,6 +16,7 @@ router = APIRouter()
 def update_ml_weights_from_completion(task: Task, account_id: int, db: Session):
     """
     Update user's ML weights based on task completion performance.
+    Enhanced with timer data integration for better learning.
     This allows the system to learn and improve over time.
     """
     try:
@@ -27,12 +28,32 @@ def update_ml_weights_from_completion(task: Task, account_id: int, db: Session):
             db.commit()
             db.refresh(ml_weights)
         
+        # Get timer data for this task to improve accuracy
+        from backend.db_models import TimerSession
+        timer_sessions = db.query(TimerSession).filter(
+            TimerSession.task_id == task.id,
+            TimerSession.status == "completed",
+            TimerSession.actual_seconds.isnot(None)
+        ).order_by(TimerSession.completed_at.desc()).limit(5).all()
+        
         # Calculate performance metrics
         time_accuracy = task.completion_accuracy if task.completion_accuracy else 1.0
+        
+        # Use timer data if available for more accurate time tracking
+        if timer_sessions:
+            avg_actual_minutes = sum(t.actual_seconds / 60 for t in timer_sessions) / len(timer_sessions)
+            if task.estimated_minutes and avg_actual_minutes > 0:
+                # Timer-based accuracy (more reliable than single completion)
+                time_accuracy = task.estimated_minutes / avg_actual_minutes
+                # Clamp to reasonable range
+                time_accuracy = max(0.3, min(2.0, time_accuracy))
+        
         satisfaction = task.user_satisfaction / 5.0 if task.user_satisfaction else 0.7  # Default to neutral
         
         # Performance score (0-1, higher is better)
-        performance_score = (time_accuracy * 0.6 + satisfaction * 0.4)
+        # Weight timer accuracy more if we have timer data
+        timer_weight = 0.7 if timer_sessions else 0.6
+        performance_score = (time_accuracy * timer_weight + satisfaction * (1 - timer_weight))
         
         # Determine which ML models performed well based on task characteristics
         # High priority + good performance = stress_predictor and flow_manager worked well
@@ -207,7 +228,7 @@ def create_task(
                 energy = 0.7  # Default
                 stress = 0.3  # Default
                 
-                # Optimize schedule
+                # Optimize schedule (7 days ahead for week view)
                 scheduled_items = optimize_func(
                     tasks=pending_tasks,
                     work_start=work_start,
@@ -216,7 +237,8 @@ def create_task(
                     current_energy=energy,
                     current_stress=stress,
                     account_id=current_user.id,
-                    db=db
+                    db=db,
+                    days_ahead=7  # Schedule for a week
                 )
                 
                 # Find or create schedule for the date
@@ -504,7 +526,8 @@ def update_task(
                 current_energy=energy,
                 current_stress=stress,
                 account_id=current_user.id,
-                db=db
+                db=db,
+                days_ahead=7  # Schedule for a week
             )
             
             if scheduled_items:
@@ -588,3 +611,74 @@ def delete_task(
     db.commit()
     
     return None
+
+@router.post("/reset-recurring", status_code=200)
+def reset_recurring_tasks(
+    current_user: Account = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Reset recurring tasks from completed to pending based on their recurrence pattern.
+    This should be called daily (e.g., at midnight) or whenever recurrence patterns should be checked.
+    
+    Logic:
+    - Daily tasks: Reset if completed yesterday or earlier (check if it's a new day)
+    - Weekly tasks: Reset if completed 7+ days ago
+    - Monthly tasks: Reset if completed 30+ days ago
+    - Custom tasks: Reset if completed custom_recurrence_days+ days ago
+    """
+    from datetime import timedelta, date
+    
+    now = datetime.utcnow()
+    today = now.date()
+    reset_count = 0
+    
+    # Find all completed tasks with recurrence patterns
+    recurring_tasks = db.query(Task).filter(
+        Task.account_id == current_user.id,
+        Task.status == "completed",
+        Task.recurrence_pattern.isnot(None),
+        Task.recurrence_pattern != "none"
+    ).all()
+    
+    for task in recurring_tasks:
+        # Check if recurrence has ended
+        if task.recurrence_end_date and task.recurrence_end_date.date() < today:
+            continue  # Skip tasks whose recurrence has ended
+        
+        # Check if task should be reset based on completion time and pattern
+        should_reset = False
+        
+        if not task.completed_at:
+            # If somehow completed but no completion time, reset it
+            should_reset = True
+        else:
+            completion_date = task.completed_at.date()
+            time_since_completion = now - task.completed_at
+            
+            if task.recurrence_pattern == "daily":
+                # Reset if completed on a previous day (new day has started)
+                should_reset = completion_date < today
+            elif task.recurrence_pattern == "weekly":
+                # Reset if completed 7+ days ago
+                should_reset = time_since_completion >= timedelta(days=7)
+            elif task.recurrence_pattern == "monthly":
+                # Reset if completed 30+ days ago
+                should_reset = time_since_completion >= timedelta(days=30)
+            elif task.recurrence_pattern == "custom" and task.custom_recurrence_days:
+                # Reset if completed custom_recurrence_days+ days ago
+                should_reset = time_since_completion >= timedelta(days=task.custom_recurrence_days)
+        
+        if should_reset:
+            task.status = "pending"
+            task.completed_at = None
+            task.scheduled_start = None
+            task.scheduled_end = None
+            reset_count += 1
+    
+    db.commit()
+    
+    return {
+        "message": f"Reset {reset_count} recurring task(s) from completed to pending",
+        "reset_count": reset_count
+    }

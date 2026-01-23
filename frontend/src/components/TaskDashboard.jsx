@@ -227,25 +227,40 @@ export default function TaskDashboard() {
     try {
       const token = localStorage.getItem('token');
       const taskIds = Array.from(selectedTasks);
-      const promises = taskIds.map(taskId =>
-        axios.put(
-          `${API_BASE_URL}/api/tasks/${taskId}`,
-          { status: 'completed' },
-          {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-          }
-        ).catch(error => ({ error, taskId }))
-      );
       
-      const results = await Promise.allSettled(promises);
-      const successful = results.filter(r => r.status === 'fulfilled' && !r.value.error).length;
-      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.error)).length;
+      // Process tasks sequentially with a small delay to avoid race conditions
+      // The backend auto-schedules on each update, so we need to avoid conflicts
+      const results = [];
+      for (let i = 0; i < taskIds.length; i++) {
+        try {
+          const response = await axios.put(
+            `${API_BASE_URL}/api/tasks/${taskIds[i]}`,
+            { status: 'completed' },
+            {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            }
+          );
+          results.push({ status: 'fulfilled', value: response });
+          
+          // Small delay between requests to avoid overwhelming the backend
+          // and prevent race conditions with auto-scheduling
+          if (i < taskIds.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (error) {
+          results.push({ status: 'rejected', reason: error });
+          console.error(`Failed to complete task ${taskIds[i]}:`, error);
+        }
+      }
+      
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
       
       await loadTasks();
       setSelectedTasks(new Set());
       
       if (failed > 0) {
-        alert(`Completed ${successful} task(s), but ${failed} task(s) failed. Please try again.`);
+        alert(`Completed ${successful} task(s), but ${failed} task(s) failed. Please check the console for details.`);
       }
     } catch (error) {
       console.error('Failed to complete tasks:', error);
@@ -261,25 +276,38 @@ export default function TaskDashboard() {
     try {
       const token = localStorage.getItem('token');
       const taskIds = Array.from(selectedTasks);
-      const promises = taskIds.map(taskId =>
-        axios.put(
-          `${API_BASE_URL}/api/tasks/${taskId}`,
-          { status: 'pending' },
-          {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-          }
-        ).catch(error => ({ error, taskId }))
-      );
       
-      const results = await Promise.allSettled(promises);
-      const successful = results.filter(r => r.status === 'fulfilled' && !r.value.error).length;
-      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.error)).length;
+      // Process tasks sequentially with a small delay to avoid race conditions
+      const results = [];
+      for (let i = 0; i < taskIds.length; i++) {
+        try {
+          const response = await axios.put(
+            `${API_BASE_URL}/api/tasks/${taskIds[i]}`,
+            { status: 'pending' },
+            {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            }
+          );
+          results.push({ status: 'fulfilled', value: response });
+          
+          // Small delay between requests
+          if (i < taskIds.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (error) {
+          results.push({ status: 'rejected', reason: error });
+          console.error(`Failed to uncomplete task ${taskIds[i]}:`, error);
+        }
+      }
+      
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
       
       await loadTasks();
       setSelectedTasks(new Set());
       
       if (failed > 0) {
-        alert(`Updated ${successful} task(s), but ${failed} task(s) failed. Please try again.`);
+        alert(`Updated ${successful} task(s), but ${failed} task(s) failed. Please check the console for details.`);
       }
     } catch (error) {
       console.error('Failed to uncomplete tasks:', error);
@@ -301,18 +329,22 @@ export default function TaskDashboard() {
           {
             headers: token ? { 'Authorization': `Bearer ${token}` } : {}
           }
-        ).catch(error => ({ error, taskId }))
+        )
       );
       
       const results = await Promise.allSettled(promises);
-      const successful = results.filter(r => r.status === 'fulfilled' && !r.value.error).length;
-      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.error)).length;
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+      
+      if (failed > 0) {
+        console.error('Some tasks failed to delete:', results.filter(r => r.status === 'rejected'));
+      }
       
       await loadTasks();
       setSelectedTasks(new Set());
       
       if (failed > 0) {
-        alert(`Deleted ${successful} task(s), but ${failed} task(s) failed. Please try again.`);
+        alert(`Deleted ${successful} task(s), but ${failed} task(s) failed. Please check the console for details.`);
       }
     } catch (error) {
       console.error('Failed to delete tasks:', error);

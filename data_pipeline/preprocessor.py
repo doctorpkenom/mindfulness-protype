@@ -19,22 +19,42 @@ class DataPreprocessor:
         """
         Converts a user context dict (e.g., {'time': 'morning', 'energy': 'low'}) 
         into a normalized feature vector.
+        Handles both string and numeric inputs for robustness.
         """
         # 1. Time Encoding (Simple 4-bin)
         time_vec = [0] * 4
-        hour = datetime.now().hour
+        
+        # Handle time_of_day if provided, otherwise use current time
+        if "time_of_day" in raw_context:
+            hour = int(raw_context["time_of_day"])
+        else:
+            hour = datetime.now().hour
+            
         if 5 <= hour < 12: time_vec[0] = 1 # Morning
         elif 12 <= hour < 17: time_vec[1] = 1 # Afternoon
         elif 17 <= hour < 22: time_vec[2] = 1 # Evening
         else: time_vec[3] = 1 # Night
         
         # 2. State Encoding (Energy/Stress)
-        # Map 'low', 'medium', 'high' to 0.0, 0.5, 1.0
+        # Handle both string and numeric inputs
+        energy_input = raw_context.get("energy", 0.5)
+        stress_input = raw_context.get("stress", 0.5)
+        
+        # Map string values to numeric
         energy_map = {"low": 0.0, "medium": 0.5, "high": 1.0}
         stress_map = {"low": 0.0, "medium": 0.5, "high": 1.0}
         
-        energy_val = energy_map.get(raw_context.get("energy", "medium"), 0.5)
-        stress_val = stress_map.get(raw_context.get("stress", "medium"), 0.5)
+        if isinstance(energy_input, str):
+            energy_val = energy_map.get(energy_input.lower(), 0.5)
+        else:
+            # Already numeric, just clamp to [0, 1]
+            energy_val = max(0.0, min(1.0, float(energy_input)))
+        
+        if isinstance(stress_input, str):
+            stress_val = stress_map.get(stress_input.lower(), 0.5)
+        else:
+            # Already numeric, just clamp to [0, 1]
+            stress_val = max(0.0, min(1.0, float(stress_input)))
         
         # Combine
         # Vector: [Morning, Afternoon, Evening, Night, Energy, Stress]
