@@ -1,35 +1,43 @@
-# Research Data Bank (`research/`)
+# Research Data Documentation
 
-This directory contains the core psychological "DNA" of the application. Each file is a machine-readable JSON module representing a specific research paper or behavioral theory.
+The `research` directory acts as the "Knowledge Base" for the system. It contains JSON files, each representing a distinct psychological framework or study.
 
-## File Format
+## 📚 Principles Included
 
-Each JSON file follows a strict schema:
-*   **Metadata:** `id`, `title`, `authors`, `year`, `core_concept`.
-*   **Mechanisms:** A list of psychological principles explaining *why* it works.
-*   **Actionable Strategies:** A list of generalized templates that the app can use.
+The system currently integrates the following frameworks:
 
-### Example Strategy Template
+| Principle | Researcher | Focus | File |
+|-----------|------------|-------|------|
+| **Flow State** | Csikszentmihalyi (1990) | Optimal Experience | `csikszentmihalyi_1990_flow.json` |
+| **Self-Compassion** | Sirois (2014) | Procrastination/Stress | `sirois_2014_self_compassion.json` |
+| **Tiny Habits** | Fogg (2009) | Behavior Change | `fogg_2009_behavior_model.json` |
+| **Imp. Intentions** | Gollwitzer (1999) | Goal Achievement | `gollwitzer_1999_implementation_intentions.json` |
+| **Habit Formation** | Lally (2010) | Consistency | `lally_2010_habit_formation.json` |
+| **Self-Efficacy** | Bandura (1977) | Confidence | `bandura_1977_self_efficacy.json` |
+| **SDT** | Ryan & Deci (2000) | Motivation | `ryan_deci_2000_sdt.json` |
+| ... | ... | ... | ... |
+
+## 🧬 Data Schema
+
+Each JSON file follows a strict schema to allow the `ResearchEngine` to parse and apply it.
+
 ```json
 {
-  "name": "If-Then Trigger Template",
-  "logic": "IF [User_Detected_Trigger] THEN [User_Selected_Micro_Action]",
-  "tags": ["initiation", "trigger", "automation"]
+  "id": "sirois_2014_self_compassion",
+  "title": "Procrastination and Stress: A Self-Compassion Perspective",
+  "author": "Fuschia M. Sirois",
+  "year": 2014,
+  "core_proposition": "Procrastination is often a failure of self-regulation caused by...",
+  "actionable_strategies": [
+    {
+      "name": "Neutral Observation",
+      "logic": "Observe the feeling of resistance without judgment.",
+      "tags": ["retention", "emotion", "mindfulness", "reflection"],
+      "difficulty": "Low"
+    }
+  ]
 }
 ```
 
-## Included Research Modules
-
-1.  **Gollwitzer (1999):** Implementation Intentions (Triggers).
-2.  **Fogg (2009):** Behavior Model (Ability/Simplicity).
-3.  **Loewenstein (1994):** Information Gap Theory (Curiosity).
-4.  **Barkley (1997):** ADHD Executive Scaffolding.
-5.  **Sirois (2014):** Self-Compassion & Procrastination.
-6.  **Lally (2010):** Habit Formation (Consistency).
-7.  **Kang (2009):** Epistemic Curiosity (Dopamine).
-8.  **Ryan & Deci (2000):** Self-Determination Theory (Autonomy).
-9.  **Rubinstein (2001):** Task Switching Costs.
-10. **Csikszentmihalyi (1990):** Flow State.
-11. **Zeigarnik (1927):** Unfinished Tasks.
-12. **Sweller (1988):** Cognitive Load Theory.
-13. **Bandura (1977):** Self-Efficacy.
+- **actionable_strategies**: The list of tools the AI can "prescribe" to the user.
+- **tags**: Used by the `ResearchEngine` to categorize strategies (e.g., `trigger`, `ability`, `retention`).

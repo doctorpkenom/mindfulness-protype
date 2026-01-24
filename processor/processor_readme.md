@@ -1,20 +1,42 @@
-# Strategy Processor (`processor/`)
+# Processor Documentation
 
-This directory contains the logic for accessing and manipulating the Research Data Bank. It acts as the interface between the raw JSON data and the application logic.
+The `processor` directory contains the **Research Engine**, which serves as the bridge between static psychological research and dynamic application logic.
 
-## Key Files
+## ⚙️ Components
 
-### `research_engine.py`
-The core class `ResearchEngine`.
-*   **Loads Modules:** Scans the `research/` directory and validates JSON files.
-*   **Retrieves Strategies:** Allows querying strategies by tag (e.g., `get_strategies_by_tag("curiosity")`).
-*   **Generates Plans:** Creates composite interventions (Trigger + Action + Retention).
-*   **Applies Adaptation:** Uses `adaptation_rules.json` to modify plans based on user context.
+### Research Engine (`research_engine.py`)
+The `ResearchEngine` class is responsible for loading, indexing, and applying psychological principles.
 
-### `adaptation_rules.json`
-A configuration file defining "Common Sense" heuristics.
-*   **Fallback Logic:** What to do when the user is stressed or overwhelmed.
-*   **Heuristics:** e.g., "If Energy is Low, reduce task duration by 50%."
+#### 1. Dynamic Plan Generation (`generate_composite_plan`)
+Constructs a "composite intervention" by chaining three distinct types of strategies (Trigger → Action → Retention) from the research database.
 
-### `test_engine.py`
-A verification script to ensure the engine is loading modules and generating plans correctly.
+```python
+def generate_composite_plan(self, user_context):
+    # 1. Trigger (Start): Implementation Intentions (Gollwitzer)
+    trigger = self.get_strategies_by_tag("trigger")[0]
+    
+    # 2. Action (Do): Tiny Habits (Fogg)
+    action = self.get_strategies_by_tag("ability")[0]
+    
+    # 3. Retention (Keep): Self-Compassion (Sirois)
+    reflection = self.get_strategies_by_tag("retention")[0]
+    
+    # ...
+    return plan
+```
+
+#### 2. Heuristic Adaptation (`adapt_plan`)
+Applies logic rules defined in `adaptation_rules.json` to modify the plan based on user context (e.g., Low Energy).
+
+```python
+# Pseudo-code for adaptation
+if user_context["energy"] == "low":
+    # Search for rule matching "User has low energy"
+    # Apply modification (e.g., "Simplify action step")
+```
+
+## 📄 Adaptation Rules (`adaptation_rules.json`)
+A JSON file defining "If-Then" rules for the engine.
+- **Condition**: Natural language description of state.
+- **Modification**: How to alter the strategy.
+- **Source**: Which research principle justifies this change.
