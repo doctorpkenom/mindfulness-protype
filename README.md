@@ -21,23 +21,106 @@ Detailed documentation for each component can be found in their respective direc
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+
+- **Python 3.10+** (with pip)
+- **Node.js 18+** (with npm)
+- **Git** (for cloning the repository)
 
-### Setup
-1. **Backend**:
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   uvicorn main:app --reload
-   ```
+### Installation & Setup
 
-2. **Frontend**:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
+#### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd mindfulness-protype
+```
+
+#### 2. Set Up Python Virtual Environment (Recommended)
+```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+# On Windows:
+.venv\Scripts\activate
+# On macOS/Linux:
+source .venv/bin/activate
+```
+
+#### 3. Install Python Dependencies
+```bash
+# Install all required packages
+pip install -r requirements.txt
+```
+
+#### 4. Initialize Database
+```bash
+# Create database tables and seed with test data
+python backend/seed_data.py
+```
+
+This will:
+- Create SQLite database (`mindfulness.db`)
+- Initialize all database tables
+- Create 10 test user personas
+- Load all research modules
+
+#### 5. Install Frontend Dependencies
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+#### 6. Start the Application
+
+**Option A - Automated Script (Recommended for Windows):**
+```powershell
+.\start_dev.ps1
+```
+
+**Option B - Manual Start:**
+
+Terminal 1 (Backend):
+```bash
+# Make sure virtual environment is activated
+uvicorn backend.main:app --reload --port 8000
+```
+
+Terminal 2 (Frontend):
+```bash
+cd frontend
+npm run dev
+```
+
+#### 7. Access the Application
+
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+
+### Default Login Credentials
+
+After running `seed_data.py`, you can log in with:
+- **Email**: `admin@example.com`
+- **Password**: `admin123`
+
+Or create a new account through the registration page.
+
+### Troubleshooting
+
+**Database Issues:**
+- If database errors occur, reset the database: `python backend/reset_db.py`
+- Then re-seed: `python backend/seed_data.py`
+
+**Port Already in Use:**
+- Backend uses port 8000, frontend uses port 5173
+- Change ports in `start_dev.ps1` or command line if needed
+
+**Import Errors:**
+- Ensure virtual environment is activated
+- Verify all dependencies installed: `pip list`
+- Check Python version: `python --version` (should be 3.10+)
+
+For more detailed setup instructions, see `GETTING_STARTED.md` and `START_HERE.md`.
 
 ## 🤖 Key Algorithms Snapshot
 
